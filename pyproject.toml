@@ -1,0 +1,41 @@
+[project]
+name = "agent-mcp-codeexec-poc"
+version = "0.1.0"
+description = "A Proof of Concept demonstrating code execution with Model Context Protocol (MCP) for efficient AI agents"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langchain-community>=0.3.0",
+    "openai>=1.50.0",
+    "mcp==1.21.0",
+    "pandas>=2.2.0",
+    "numpy>=2.2.0",
+    "python-dotenv>=1.0.0",
+    "python-dateutil>=2.9.0",
+    "restrictedpython>=7.4",
+    "requests>=2.32.0",
+    "pytz>=2024.1",
+    "timezonefinder>=6.5.0",
+    "faiss-cpu>=1.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
