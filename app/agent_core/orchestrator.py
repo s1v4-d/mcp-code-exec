@@ -9,6 +9,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.config import settings
 from app.mcp_client.client import MCPClient
 from app.agent_core.code_executor import CodeExecutor
+from app.agent_core.harness import ExecutionHarness  # New: Runtime harness
 from app.agent_core.monitoring import Metrics, monitoring
 from app.prompts.agent_prompt import (
     AGENT_SYSTEM_PROMPT,
@@ -31,8 +32,12 @@ class AgentOrchestrator:
     5. Always provides natural conversational responses
     """
     
-    def __init__(self):
-        """Initialize the orchestrator."""
+    def __init__(self, use_harness: bool = True):
+        """Initialize the orchestrator.
+        
+        Args:
+            use_harness: If True, use ExecutionHarness for improved code execution
+        """
         self.llm = ChatOpenAI(
             model=settings.openai_model,
             api_key=settings.openai_api_key,
@@ -44,7 +49,15 @@ class AgentOrchestrator:
             temperature=0.1  # Low temperature for code generation
         )
         self.mcp_client = MCPClient()
-        self.code_executor = CodeExecutor()
+        
+        # Choose executor (legacy or new harness)
+        if use_harness:
+            self.code_executor = ExecutionHarness(
+                timeout_seconds=settings.code_exec_timeout_seconds,
+                workspace_dir="workspace",
+            )
+        else:
+            self.code_executor = CodeExecutor()
     
     async def execute(self, user_request: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
         """
@@ -86,7 +99,11 @@ class AgentOrchestrator:
                 
                 # Step 5: Execute code
                 print("[Agent] Executing code...")
-                exec_result = self.code_executor.execute(code)
+                # Support both old executor and new harness
+                if hasattr(self.code_executor, 'execute_async'):
+                    exec_result = await self.code_executor.execute_async(code)
+                else:
+                    exec_result = self.code_executor.execute(code)
                 
                 if not exec_result["success"]:
                     raise ValueError(f"Code execution failed: {exec_result['error']}")

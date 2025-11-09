@@ -62,16 +62,95 @@ User Request → FastAPI → LangChain Orchestrator → Code Generator (LLM)
 ### Prerequisites
 
 - Python 3.10+
-- [uv](https://docs.astral.sh/uv/) (install with: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- Docker (optional but recommended - for automatic PostgreSQL setup)
 - OpenAI API key
+- OpenWeatherMap API key (optional, for weather features)
 
-### Installation
+### One-Command Setup
 
 ```bash
-cd agent-mcp-codeexec-poc
+# Clone the repository
+git clone <repository-url>
+cd mcp-code-exec
+
+# Complete setup (installs uv, dependencies, creates .env, sets up databases)
+make setup
+
+# Edit .env file with your API keys
+nano .env
+
+# Start the server
+make start
+```
+
+The setup command automatically:
+- Installs `uv` if not already installed
+- Installs all Python dependencies via `uv sync`
+- Creates `.env` file from template
+- Creates required directories (workspace, logs, data)
+- Starts PostgreSQL in Docker (if Docker is available)
+- Sets up PostgreSQL database with sample data
+- Sets up RAG index with sample documents
+
+No manual PostgreSQL installation required - Docker handles it automatically!
+
+### Manual Setup (Alternative)
+
+If you prefer manual setup or don't have Docker:
+
+```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install dependencies
 uv sync
+
+# Copy environment template
+cp .env.example .env
+# Edit .env with your API keys
+
+# Create directories
+mkdir -p workspace logs data/rag data/invoices
+
+# Setup RAG and PostgreSQL
+uv run python scripts/setup_rag.py
+
+# PostgreSQL (only if you have PostgreSQL installed locally)
+uv run python scripts/setup_pg.py
+```
+
+### PostgreSQL Notes
+
+The `make setup` command automatically starts PostgreSQL in Docker if:
+- Docker is installed and running
+- No PostgreSQL container named `postgres-mcp` exists
+
+If you already have PostgreSQL running locally or prefer a different setup:
+- Set the connection details in `.env` file
+- Run `uv run python scripts/setup_pg.py` manually
+
+**Manual PostgreSQL Setup:**
+
+**Manual PostgreSQL Setup:**
+
+**Option 1: Docker (Recommended)**
+```bash
+docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres --name postgres-mcp postgres:14
+uv run python scripts/setup_pg.py
+```
+
+**Option 2: Local Installation**
+```bash
+# Ubuntu/Debian
+sudo apt-get install postgresql
+
+# macOS
+brew install postgresql@14
+```
+
+Then run:
+```bash
+uv run python scripts/setup_pg.py
 ```
 
 ### Configuration
@@ -90,6 +169,13 @@ OPEN_WEATHER_API_KEY=your-openweather-key-here
 USE_OPENAI_EMBEDDINGS=false  # Set to true for OpenAI embeddings
 RAG_INDEX_PATH=/workspaces/mcp-code-exec/agent-mcp-codeexec-poc/rag_index
 
+# PostgreSQL Configuration (for PostgreSQL MCP Server)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=mcp_demo
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+
 # Paths
 WORKSPACE_PATH=/workspaces/mcp-code-exec/agent-mcp-codeexec-poc/workspace
 LOGS_PATH=/workspaces/mcp-code-exec/agent-mcp-codeexec-poc/logs
@@ -98,14 +184,21 @@ LOGS_PATH=/workspaces/mcp-code-exec/agent-mcp-codeexec-poc/logs
 ### Running the Server
 
 ```bash
-# Development mode
-uv run fastapi dev app/main.py
-
-# Production mode
-uv run fastapi run app/main.py
+# Start the FastAPI server
+make start
 ```
 
-The API will be available at `http://127.0.0.1:8000` with interactive docs at `http://127.0.0.1:8000/docs`.
+The server will start at `http://localhost:8000` with:
+- Interactive API docs: `http://localhost:8000/docs`
+- OpenAPI schema: `http://localhost:8000/openapi.json`
+
+### Available Make Commands
+
+```bash
+make help    # Show available commands
+make setup   # Complete project setup (uv, deps, env, databases)
+make start   # Start the FastAPI server
+```
 
 ## Usage
 
@@ -122,13 +215,13 @@ python examples/test_agent_mcp_tools.py
 ```
 
 This interactive test demonstrates the agent generating code to:
-- ✅ Get current weather for any city
-- ✅ Get weather forecasts
-- ✅ Add documents to RAG knowledge base
-- ✅ Search RAG with semantic queries
-- ✅ Combine weather + RAG in single workflow
-- ✅ Upload files and query them
-- ✅ Get RAG statistics
+- Get current weather for any city
+- Get weather forecasts
+- Add documents to RAG knowledge base
+- Search RAG with semantic queries
+- Combine weather + RAG in single workflow
+- Upload files and query them
+- Get RAG statistics
 
 ### MCP Agent Examples
 

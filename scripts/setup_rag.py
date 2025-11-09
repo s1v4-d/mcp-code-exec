@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Setup script to embed RAG documents during initialization."""
 
+import asyncio
 import sys
 from pathlib import Path
 
-# Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -33,7 +33,7 @@ def load_documents_from_directory(directory: Path) -> list[tuple[str, str]]:
     return documents
 
 
-def setup_rag_index():
+async def setup_rag_index():
     """Setup RAG index with documents from data/rag directory."""
     print("Setting up RAG index...")
     
@@ -42,11 +42,9 @@ def setup_rag_index():
         print("RAG setup skipped. Please configure your API key to use RAG features.")
         return
     
-    # Check existing documents
-    stats = rag_service.get_stats()
+    stats = await rag_service.get_stats()
     print(f"Current index: {stats.get('total_documents', 0)} documents")
     
-    # Load documents from data/rag directory
     rag_data_dir = project_root / "data" / "rag"
     print(f"\nLoading documents from: {rag_data_dir}")
     
@@ -57,12 +55,11 @@ def setup_rag_index():
         print("Add .txt, .md, .csv, .json, or .py files to data/rag/ to populate the RAG index")
         return
     
-    # Embed documents using the service
     print(f"\nEmbedding {len(documents)} documents...")
     texts = [doc[0] for doc in documents]
     metadatas = [{'filename': doc[1]} for doc in documents]
     
-    result = rag_service.add_documents(texts, source='local_files', metadatas=metadatas)
+    result = await rag_service.add_documents(texts, source='local_files', metadatas=metadatas)
     
     if result['status'] == 'success':
         print(f"\nSuccess! Added {result['chunks_added']} chunks")
@@ -73,7 +70,7 @@ def setup_rag_index():
 
 if __name__ == "__main__":
     try:
-        setup_rag_index()
+        asyncio.run(setup_rag_index())
     except Exception as e:
         print(f"Error during RAG setup: {e}")
         import traceback

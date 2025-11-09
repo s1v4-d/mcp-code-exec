@@ -1,0 +1,43 @@
+"""{{ tool_name }} - Auto-generated MCP tool wrapper
+
+This file is auto-generated. Do not edit manually.
+Generated from MCP server: {{ server_name }}
+"""
+
+from typing import Any, Dict, Optional, List, Union, Literal
+from pydantic import BaseModel, Field
+
+{{ params_model }}
+
+async def {{ tool_name }}(params: {{ params_model_name }}) -> Dict[str, Any]:
+    """
+    {{ description }}
+    
+    This is an auto-generated wrapper for the {{ tool_name }} MCP tool.
+    
+    Args:
+        params: Tool parameters (validated by Pydantic)
+        
+    Returns:
+        Tool execution result as dictionary
+        
+    Raises:
+        ValueError: If tool execution fails
+    """
+    from app.mcp_client.client import mcp_client
+    
+    # Call MCP tool
+    result = mcp_client.call_tool(
+        "{{ tool_identifier }}",
+        params.model_dump(exclude_none=True)
+    )
+    
+    # Defensive unwrapping - handle various response formats
+    if hasattr(result, "value"):
+        unwrapped = result.value
+    elif hasattr(result, "content"):
+        unwrapped = result.content
+    else:
+        unwrapped = result
+    
+    return unwrapped

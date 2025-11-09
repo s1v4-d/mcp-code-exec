@@ -1,0 +1,17 @@
+"""{{ server_name }} - Auto-generated MCP server wrapper
+
+This package is auto-generated. Do not edit manually.
+Generated from MCP server: {{ server_name }}
+
+Available tools:
+{% for tool in tool_names %}  - {{ tool }}
+{% endfor %}
+"""
+
+# Import all tool functions
+{% for tool in tool_names %}from .{{ tool }} import {{ tool }}
+{% endfor %}
+
+__all__ = [
+{% for tool in tool_names %}    "{{ tool }}",
+{% endfor %}]

@@ -24,6 +24,10 @@ dependencies = [
     "pytz>=2024.1",
     "timezonefinder>=6.5.0",
     "faiss-cpu>=1.8.0",
+    # New: Progressive disclosure dependencies
+    "jinja2>=3.1.0",
+    "asyncpg>=0.30.0",
+    "sqlparse>=0.5.0",
 ]
 
 [dependency-groups]
