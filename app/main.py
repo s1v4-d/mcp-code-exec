@@ -1,8 +1,16 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import agent, weather, rag
 from app.config import settings
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(
@@ -24,6 +32,21 @@ app.add_middleware(
 app.include_router(agent.router, prefix="/api/v1", tags=["agent"])
 app.include_router(weather.router, prefix="/api/v1/weather", tags=["weather"])
 app.include_router(rag.router, prefix="/api/v1/rag", tags=["rag"])
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Log startup configuration."""
+    logger.info("="*80)
+    logger.info("🚀 MCP CODE EXECUTION AGENT STARTING")
+    logger.info("="*80)
+    logger.info(f"OpenAI Model: {settings.openai_model}")
+    logger.info(f"Workspace: {settings.workspace_path}")
+    logger.info(f"Logs: {settings.logs_path}")
+    logger.info(f"Code Execution Timeout: {settings.code_exec_timeout_seconds}s")
+    logger.info(f"Tool Discovery Mode: FILESYSTEM-based progressive disclosure")
+    logger.info(f"Following Anthropic paper approach (98.7% token reduction)")
+    logger.info("="*80)
 
 
 @app.get("/")
