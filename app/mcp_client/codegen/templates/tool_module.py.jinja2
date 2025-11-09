@@ -26,8 +26,8 @@ async def {{ tool_name }}(params: {{ params_model_name }}) -> Dict[str, Any]:
     """
     from app.mcp_client.client import mcp_client
     
-    # Call MCP tool
-    result = mcp_client.call_tool(
+    # Call MCP tool (await since it's async)
+    result = await mcp_client.call_tool(
         "{{ tool_identifier }}",
         params.model_dump(exclude_none=True)
     )

@@ -45,6 +45,8 @@ Following the Anthropic paper on "Code Execution with MCP", you will:
 3. Process data in the execution environment (not in your context)
 4. Generate ONLY executable Python code - no explanations, no markdown wrappers
 
+CRITICAL: All tool functions are ASYNC and must be called with await inside an async function.
+
 TOOL DISCOVERY (as per paper):
 Tools are organized as files in servers/<server_name>/<tool_name>.py
 
@@ -68,19 +70,22 @@ definition = tool_discovery.get_tool_definition('weather', 'get_current_weather'
 # or
 code = tool_discovery.read_file('weather/get_current_weather.py')
 
-# Step 4: Import and use the tool
+# Step 4: Import and use the tool (ASYNC - use await!)
 from servers.weather import get_current_weather
-weather = get_current_weather(city_name='Tokyo', country_name='Japan')
+
+# Call async tool with await
+weather = await get_current_weather(city_name='Tokyo', country_name='Japan')
 ```
 
 IMPORTANT RULES:
 1. Generate ONLY executable Python code - no explanations, no markdown blocks
-2. Discover tools using tool_discovery first, then import what you need
-3. Process data locally - filter, aggregate, transform in code
-4. Print only summaries/results, not raw data
-5. Save large results to workspace/ files
-6. Use detail_level='name' or 'summary' to minimize tokens
-7. Only read full definitions when absolutely necessary
+2. ALL tool function calls MUST use await keyword
+3. Discover tools using tool_discovery first, then import what you need
+4. Process data locally - filter, aggregate, transform in code
+5. Print only summaries/results, not raw data
+6. Save large results to workspace/ files
+7. Use detail_level='name' or 'summary' to minimize tokens
+8. Only read full definitions when absolutely necessary
 
 EXAMPLE WORKFLOW:
 
@@ -92,8 +97,8 @@ print(f"Found {len(results)} relevant tools")
 # Import what we need
 from servers.weather import get_forecast
 
-# Use the tool
-forecast = get_forecast(
+# Use the async tool with await
+forecast = await get_forecast(
     city_name='Paris',
     country_name='France',
     days=2,
@@ -119,22 +124,22 @@ tools = tool_discovery.list_tools('invoice')
 # Import what we need
 from servers.invoice import fetch_invoices, update_anomaly_log
 
-# Fetch data
-invoices = fetch_invoices(month='current_month', limit=1000)
+# Fetch data (async - use await!)
+invoices = await fetch_invoices(month='current_month', limit=1000)
 
 # Process locally (data never enters your context)
 df = pd.DataFrame(invoices)
 duplicates = df[df.duplicated(subset=['invoice_id'], keep=False)]
 high_amounts = df[df['amount'] > df['amount'].mean() + 3*df['amount'].std()]
 
-# Log anomalies
+# Log anomalies (async - use await!)
 if len(duplicates) > 0:
     anomaly_records = [{
         'invoice_id': row['invoice_id'],
         'anomaly_type': 'duplicate',
         'amount': row['amount']
     } for _, row in duplicates.iterrows()]
-    update_anomaly_log(anomalies=anomaly_records)
+    await update_anomaly_log(anomalies=anomaly_records)
 
 # Save full data, print summary only
 df.to_csv('workspace/invoices_analysis.csv', index=False)
@@ -146,6 +151,7 @@ print(f"Saved to: workspace/invoices_analysis.csv")
 
 Remember: 
 - Output ONLY Python code
+- ALL tool calls must use await
 - Explore before importing
 - Process data in code
 - Minimize token usage by using appropriate detail levels

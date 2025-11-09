@@ -9,7 +9,7 @@ from typing import Dict, Any
 from servers.client import mcp_client
 
 
-def get_rag_stats() -> Dict[str, Any]:
+async def get_rag_stats() -> Dict[str, Any]:
     """
     Get statistics about the RAG index.
     
@@ -29,11 +29,11 @@ def get_rag_stats() -> Dict[str, Any]:
         }
     
     Example:
-        >>> stats = get_rag_stats()
+        >>> stats = await get_rag_stats()
         >>> print(f"Total documents: {stats['total_documents']}")
         >>> print(f"Embedding model: {stats['embedding_model']}")
         >>> print("Documents by source:")
         >>> for source, count in stats['sources'].items():
         ...     print(f"  {source}: {count}")
     """
-    return mcp_client.call_tool("get_rag_stats", {})
+    return await mcp_client.call_tool("get_rag_stats", {})

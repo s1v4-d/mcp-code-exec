@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Optional
 from servers.client import mcp_client
 
 
-def add_documents(
+async def add_documents(
     texts: List[str],
     source: str = "agent",
     metadatas: Optional[List[Dict[str, Any]]] = None
@@ -35,7 +35,7 @@ def add_documents(
     
     Example:
         >>> # Add single document
-        >>> result = add_documents(
+        >>> result = await add_documents(
         ...     texts=["Python is a high-level programming language."],
         ...     source="programming_guide"
         ... )
@@ -50,12 +50,12 @@ def add_documents(
         ...     {"topic": "ML", "difficulty": "beginner"},
         ...     {"topic": "DL", "difficulty": "intermediate"}
         ... ]
-        >>> result = add_documents(texts=docs, source="ml_course", metadatas=metadata)
+        >>> result = await add_documents(texts=docs, source="ml_course", metadatas=metadata)
     
     Raises:
         ValueError: If texts list is empty
     """
-    return mcp_client.call_tool("add_documents", {
+    return await mcp_client.call_tool("add_documents", {
         "texts": texts,
         "source": source,
         "metadatas": metadatas

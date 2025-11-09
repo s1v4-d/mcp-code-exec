@@ -23,6 +23,7 @@ class MCPClient:
         from app.mcp_client.tools.invoice_tool import InvoiceTool
         from app.mcp_client.tools.weather_tool import WeatherTool
         from app.mcp_client.tools.rag_tool import RAGTool
+        from app.mcp_client.tools.postgres_tool import PostgresTool
         from app.config import settings
         
         # Register invoice tool
@@ -47,6 +48,14 @@ class MCPClient:
             print("[MCP Client] RAG tool registered")
         except Exception as e:
             print(f"[MCP Client] Warning: Could not register RAG tool: {e}")
+        
+        # Register PostgreSQL tool
+        try:
+            postgres_tool = PostgresTool()
+            self.tools.update(postgres_tool.get_tools())
+            print("[MCP Client] PostgreSQL tool registered")
+        except Exception as e:
+            print(f"[MCP Client] Warning: Could not register PostgreSQL tool: {e}")
     
     def list_tools(self) -> List[Dict[str, Any]]:
         """
@@ -84,9 +93,9 @@ class MCPClient:
         
         return "\n".join(definitions)
     
-    def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
+    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         """
-        Call an MCP tool.
+        Call an MCP tool (supports both sync and async functions).
         
         Args:
             tool_name: Name of the tool to call
@@ -102,7 +111,13 @@ class MCPClient:
             raise ValueError(f"Tool '{tool_name}' not found. Available tools: {list(self.tools.keys())}")
         
         tool_func = self.tools[tool_name]["function"]
-        return tool_func(**arguments)
+        
+        # Check if function is async
+        import inspect
+        if inspect.iscoroutinefunction(tool_func):
+            return await tool_func(**arguments)
+        else:
+            return tool_func(**arguments)
 
 
 # Global instance for use in generated code

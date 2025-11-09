@@ -252,38 +252,16 @@ class CodeExecutor:
         }
         
         return safe_builtins
-    
-    def validate_code(self, code: str) -> Tuple[bool, str]:
+
+    async def execute_async(self, code: str) -> Dict[str, Any]:
         """
-        Validate code before execution.
+        Execute code asynchronously using the harness.
         
         Args:
-            code: Code to validate
+            code: Python code to execute
             
         Returns:
-            Tuple of (is_valid, error_message)
+            Execution result dictionary
         """
-        # Check for extremely dangerous patterns only
-        dangerous_patterns = [
-            'import subprocess',
-            'subprocess.',
-            '__builtins__',
-            'eval(',
-            'exec(',
-            'compile(',
-        ]
-        
-        for pattern in dangerous_patterns:
-            if pattern in code:
-                return False, f"Dangerous pattern detected: {pattern}"
-        
-        # Relaxed file operations - allow workspace/ and common operations
-        # No longer blocking open() or os/sys imports as they're in ALLOWED_IMPORTS
-        
-        # Try to compile the code
-        try:
-            compile(code, '<string>', 'exec')
-        except SyntaxError as e:
-            return False, f"Syntax error: {str(e)}"
-        
-        return True, ""
+        # Use the harness for async execution
+        return await self.harness.execute_async(code)

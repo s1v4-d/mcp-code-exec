@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from servers.client import mcp_client
 
 
-def get_forecast(
+async def get_forecast(
     city_name: Optional[str] = None,
     zip_code: Optional[str] = None,
     country_name: Optional[str] = None,
@@ -51,7 +51,7 @@ def get_forecast(
     
     Example:
         >>> # Get forecast for tomorrow at 2 PM
-        >>> forecast = get_forecast(
+        >>> forecast = await get_forecast(
         ...     city_name="London",
         ...     country_name="UK",
         ...     days=1,
@@ -61,12 +61,12 @@ def get_forecast(
         >>> print(f"Conditions: {forecast['weather'][0]['description']}")
         
         >>> # Get forecast for 3 days ahead
-        >>> forecast = get_forecast(city_name="Tokyo", days=3, hour=10)
+        >>> forecast = await get_forecast(city_name="Tokyo", days=3, hour=10)
     
     Raises:
         ValueError: If days not in range 1-5, or if required parameters missing
     """
-    return mcp_client.call_tool("get_forecast", {
+    return await mcp_client.call_tool("get_forecast", {
         "city_name": city_name,
         "zip_code": zip_code,
         "country_name": country_name,

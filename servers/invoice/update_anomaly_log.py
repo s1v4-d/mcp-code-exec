@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 from servers.client import mcp_client
 
 
-def update_anomaly_log(anomalies: List[Dict[str, Any]]) -> Dict[str, Any]:
+async def update_anomaly_log(anomalies: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Log detected anomalies to the system.
     
@@ -38,7 +38,7 @@ def update_anomaly_log(anomalies: List[Dict[str, Any]]) -> Dict[str, Any]:
     
     Example:
         >>> # Detect and log duplicates
-        >>> invoices = fetch_invoices()
+        >>> invoices = await fetch_invoices()
         >>> import pandas as pd
         >>> df = pd.DataFrame(invoices)
         >>> 
@@ -58,7 +58,7 @@ def update_anomaly_log(anomalies: List[Dict[str, Any]]) -> Dict[str, Any]:
         ...     })
         >>> 
         >>> # Log them
-        >>> result = update_anomaly_log(anomalies)
+        >>> result = await update_anomaly_log(anomalies)
         >>> print(f"Logged {result['count']} anomalies with ID: {result['log_id']}")
         
         >>> # Detect high-value anomalies
@@ -74,11 +74,11 @@ def update_anomaly_log(anomalies: List[Dict[str, Any]]) -> Dict[str, Any]:
         ...     "amount": row['amount']
         ... } for _, row in high_amounts.iterrows()]
         >>> 
-        >>> result = update_anomaly_log(anomalies)
+        >>> result = await update_anomaly_log(anomalies)
     
     Raises:
         ValueError: If anomalies list is empty
     """
-    return mcp_client.call_tool("update_anomaly_log", {
+    return await mcp_client.call_tool("update_anomaly_log", {
         "anomalies": anomalies
     })

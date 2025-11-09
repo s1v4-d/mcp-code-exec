@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from servers.client import mcp_client
 
 
-def get_geo_data(
+async def get_geo_data(
     city_name: Optional[str] = None,
     zip_code: Optional[str] = None,
     country_name: Optional[str] = None
@@ -38,17 +38,17 @@ def get_geo_data(
     
     Example:
         >>> # Get coordinates for a city
-        >>> geo = get_geo_data(city_name="Sydney", country_name="Australia")
+        >>> geo = await get_geo_data(city_name="Sydney", country_name="Australia")
         >>> print(f"Coordinates: {geo['lat']}, {geo['lon']}")
         
         >>> # Get coordinates by zip code
-        >>> geo = get_geo_data(zip_code="90210", country_name="US")
+        >>> geo = await get_geo_data(zip_code="90210", country_name="US")
         >>> print(f"Location: {geo['name']}")
     
     Raises:
         ValueError: If neither city_name nor zip_code provided
     """
-    return mcp_client.call_tool("get_geo_data", {
+    return await mcp_client.call_tool("get_geo_data", {
         "city_name": city_name,
         "zip_code": zip_code,
         "country_name": country_name

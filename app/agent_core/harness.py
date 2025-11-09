@@ -52,11 +52,11 @@ class ExecutionHarness:
         self.allowed_modules = allowed_modules or [
             'json', 'datetime', 'typing', 're', 'math', 'statistics',
             'pandas', 'numpy', 'collections', 'itertools', 'functools',
-            'pathlib', 'csv', 'os', 'sys'
+            'pathlib', 'csv', 'os', 'sys', 'asyncio'
         ]
     
     async def execute_async(self, code: str) -> Dict[str, Any]:
-        """Execute code asynchronously in a separate thread.
+        """Execute code asynchronously with timeout.
         
         Args:
             code: Python code to execute
@@ -68,12 +68,22 @@ class ExecutionHarness:
                 - error: Optional[str]
                 - execution_time_ms: int
         """
-        # Run execution in thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.execute_sync, code)
+        try:
+            # Run execution with asyncio timeout instead of signals
+            return await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, self.execute_sync_no_signal, code),
+                timeout=self.timeout_seconds
+            )
+        except asyncio.TimeoutError:
+            return {
+                "success": False,
+                "output": "",
+                "error": f"Execution timeout after {self.timeout_seconds} seconds",
+                "execution_time_ms": self.timeout_seconds * 1000
+            }
     
     def execute_sync(self, code: str) -> Dict[str, Any]:
-        """Execute code synchronously with timeout protection.
+        """Execute code synchronously with timeout protection (main thread only).
         
         Args:
             code: Python code to execute
@@ -95,14 +105,18 @@ class ExecutionHarness:
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
         
-        # Save original signal handler
+        # Save original signal handler (only works in main thread)
         old_handler = None
-        if hasattr(signal, 'SIGALRM'):
-            old_handler = signal.signal(signal.SIGALRM, self._timeout_handler)
+        try:
+            if hasattr(signal, 'SIGALRM'):
+                old_handler = signal.signal(signal.SIGALRM, self._timeout_handler)
+        except ValueError:
+            # Not in main thread, skip signal handling
+            pass
         
         try:
-            # Set timeout alarm
-            if hasattr(signal, 'SIGALRM'):
+            # Set timeout alarm (only if in main thread)
+            if old_handler is not None and hasattr(signal, 'SIGALRM'):
                 signal.alarm(self.timeout_seconds)
             
             # Prepare execution environment
@@ -129,12 +143,87 @@ class ExecutionHarness:
             result["output"] = stdout_capture.getvalue()
             
         finally:
-            # Cancel timeout
-            if hasattr(signal, 'SIGALRM'):
+            # Cancel timeout (only if in main thread)
+            if old_handler is not None and hasattr(signal, 'SIGALRM'):
                 signal.alarm(0)
-                if old_handler:
-                    signal.signal(signal.SIGALRM, old_handler)
+                signal.signal(signal.SIGALRM, old_handler)
             
+            # Record execution time
+            result["execution_time_ms"] = int((time.time() - start_time) * 1000)
+        
+        # Append stderr if present
+        stderr_output = stderr_capture.getvalue()
+        if stderr_output:
+            result["output"] += f"\n[STDERR]\n{stderr_output}"
+        
+        return result
+    
+    def execute_sync_no_signal(self, code: str) -> Dict[str, Any]:
+        """Execute code synchronously without signal handling (thread-safe).
+        
+        Supports both sync and async code execution.
+        
+        Args:
+            code: Python code to execute
+            
+        Returns:
+            Execution result dictionary
+        """
+        start_time = time.time()
+        
+        # Prepare result structure
+        result = {
+            "success": False,
+            "output": "",
+            "error": None,
+            "execution_time_ms": 0
+        }
+        
+        # Capture stdout and stderr
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+        
+        try:
+            # Prepare execution environment
+            exec_globals = self._prepare_environment()
+            
+            # Execute with captured output
+            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                # Check if code contains async/await OR mcp_client.call_tool
+                # mcp_client.call_tool is now async and needs to be awaited
+                needs_async = (
+                    'await ' in code or 
+                    'async ' in code or 
+                    'mcp_client.call_tool' in code
+                )
+                
+                if needs_async:
+                    # Wrap code in async main function
+                    wrapped_code = f"""
+import asyncio
+
+async def __async_main__():
+{chr(10).join('    ' + line for line in code.split(chr(10)))}
+
+asyncio.run(__async_main__())
+"""
+                    exec(wrapped_code, exec_globals)
+                else:
+                    exec(code, exec_globals)
+            
+            # Success
+            result["success"] = True
+            result["output"] = stdout_capture.getvalue()
+            
+        except ImportError as e:
+            result["error"] = f"Import error: {str(e)}\nAllowed modules: {', '.join(self.allowed_modules)}"
+            result["output"] = stdout_capture.getvalue()
+            
+        except Exception as e:
+            result["error"] = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+            result["output"] = stdout_capture.getvalue()
+            
+        finally:
             # Record execution time
             result["execution_time_ms"] = int((time.time() - start_time) * 1000)
         
@@ -176,6 +265,9 @@ class ExecutionHarness:
                     from pathlib import Path
                     exec_globals['Path'] = Path
                     exec_globals['pathlib'] = __import__('pathlib')
+                elif module_name == 'asyncio':
+                    import asyncio
+                    exec_globals['asyncio'] = asyncio
                 else:
                     exec_globals[module_name] = __import__(module_name)
             except ImportError:

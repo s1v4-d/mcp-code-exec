@@ -9,7 +9,7 @@ from typing import Dict, Any
 from servers.client import mcp_client
 
 
-def clear_rag_index() -> Dict[str, str]:
+async def clear_rag_index() -> Dict[str, str]:
     """
     Clear the entire RAG index.
     
@@ -25,11 +25,11 @@ def clear_rag_index() -> Dict[str, str]:
     
     Example:
         >>> # Clear all documents
-        >>> result = clear_rag_index()
+        >>> result = await clear_rag_index()
         >>> print(result['message'])
         
         >>> # Verify it's cleared
-        >>> stats = get_rag_stats()
+        >>> stats = await get_rag_stats()
         >>> print(f"Documents remaining: {stats['total_documents']}")
     """
-    return mcp_client.call_tool("clear_rag_index", {})
+    return await mcp_client.call_tool("clear_rag_index", {})

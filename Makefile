@@ -1,4 +1,4 @@
-.PHONY: help setup start
+.PHONY: help setup start stop logs clean restart
 
 .DEFAULT_GOAL := help
 
@@ -7,6 +7,10 @@ help:
 	@echo "make help      Show this help message"
 	@echo "make setup     Complete project setup"
 	@echo "make start     Start the FastAPI server"
+	@echo "make stop      Stop the server and kill processes on port 8000"
+	@echo "make restart   Stop and start the server"
+	@echo "make logs      Show server logs (last 50 lines)"
+	@echo "make clean     Stop server and clear all cache/temp files"
 
 setup:
 	@echo "Step 1/7: Checking Python version..."
@@ -53,3 +57,48 @@ setup:
 start:
 	@echo "Starting server at http://localhost:8000"
 	@uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+stop:
+	@echo "Stopping server..."
+	@-pkill -9 -f "uvicorn app.main:app" 2>/dev/null || true
+	@echo "Killing processes on port 8000..."
+	@-lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+	@sleep 1
+	@echo "Server stopped"
+
+restart:
+	@echo "Restarting server..."
+	@$(MAKE) stop
+	@sleep 2
+	@$(MAKE) start
+
+logs:
+	@echo "=== Server Logs (last 50 lines) ==="
+	@if [ -d logs ]; then \
+		latest_log=$$(ls -t logs/*.json 2>/dev/null | head -1); \
+		if [ -n "$$latest_log" ]; then \
+			echo "Latest log file: $$latest_log"; \
+			cat "$$latest_log" | python3 -m json.tool 2>/dev/null || cat "$$latest_log"; \
+		else \
+			echo "No log files found in logs/"; \
+		fi; \
+	else \
+		echo "logs/ directory not found"; \
+	fi
+	@echo ""
+	@echo "=== Recent Run Logs ==="
+	@ls -lht logs/*.json 2>/dev/null | head -10 || echo "No logs found"
+
+clean:
+	@echo "Cleaning up..."
+	@$(MAKE) stop
+	@echo "Clearing Python cache..."
+	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
+	@find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+	@echo "Clearing .pytest_cache..."
+	@rm -rf .pytest_cache 2>/dev/null || true
+	@echo "Clearing uv cache..."
+	@rm -rf .venv/__pycache__ 2>/dev/null || true
+	@echo "Clean complete"

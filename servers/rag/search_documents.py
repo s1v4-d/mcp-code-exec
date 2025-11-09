@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 from servers.client import mcp_client
 
 
-def search_documents(query: str, k: int = 4) -> List[Dict[str, Any]]:
+async def search_documents(query: str, k: int = 4) -> List[Dict[str, Any]]:
     """
     Search for similar documents using semantic similarity.
     
@@ -38,20 +38,20 @@ def search_documents(query: str, k: int = 4) -> List[Dict[str, Any]]:
     
     Example:
         >>> # Basic search
-        >>> results = search_documents("What is Python?", k=3)
+        >>> results = await search_documents("What is Python?", k=3)
         >>> for i, result in enumerate(results, 1):
         ...     print(f"{i}. {result['text'][:100]}...")
         ...     print(f"   Score: {result['score']:.4f}")
         ...     print(f"   Source: {result['metadata']['source']}")
         
         >>> # Search and filter by metadata
-        >>> results = search_documents("machine learning algorithms", k=5)
+        >>> results = await search_documents("machine learning algorithms", k=5)
         >>> ml_results = [r for r in results if r['metadata'].get('topic') == 'ML']
     
     Returns:
         Empty list if no documents in index
     """
-    return mcp_client.call_tool("search_documents", {
+    return await mcp_client.call_tool("search_documents", {
         "query": query,
         "k": k
     })

@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from servers.client import mcp_client
 
 
-def get_current_weather(
+async def get_current_weather(
     city_name: Optional[str] = None,
     zip_code: Optional[str] = None,
     country_name: Optional[str] = None
@@ -47,18 +47,18 @@ def get_current_weather(
     
     Example:
         >>> # Get weather for a city
-        >>> weather = get_current_weather(city_name="Tokyo", country_name="Japan")
+        >>> weather = await get_current_weather(city_name="Tokyo", country_name="Japan")
         >>> print(f"Temperature: {weather['main']['temp']}°F")
         >>> print(f"Conditions: {weather['weather'][0]['description']}")
         
         >>> # Get weather by zip code
-        >>> weather = get_current_weather(zip_code="10001", country_name="US")
+        >>> weather = await get_current_weather(zip_code="10001", country_name="US")
     
     Raises:
         ValueError: If neither city_name nor zip_code provided, or if country_name
                    missing when using zip_code
     """
-    return mcp_client.call_tool("get_current_weather", {
+    return await mcp_client.call_tool("get_current_weather", {
         "city_name": city_name,
         "zip_code": zip_code,
         "country_name": country_name

@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 from servers.client import mcp_client
 
 
-def fetch_invoices(month: str = "current_month", limit: int = 100) -> List[Dict[str, Any]]:
+async def fetch_invoices(month: str = "current_month", limit: int = 100) -> List[Dict[str, Any]]:
     """
     Fetch invoice data for a specified month.
     
@@ -37,11 +37,11 @@ def fetch_invoices(month: str = "current_month", limit: int = 100) -> List[Dict[
     
     Example:
         >>> # Fetch current month's invoices
-        >>> invoices = fetch_invoices()
+        >>> invoices = await fetch_invoices()
         >>> print(f"Retrieved {len(invoices)} invoices")
         
         >>> # Fetch specific month with limit
-        >>> invoices = fetch_invoices(month="2025-01", limit=50)
+        >>> invoices = await fetch_invoices(month="2025-01", limit=50)
         
         >>> # Analyze invoice data
         >>> import pandas as pd
@@ -58,7 +58,7 @@ def fetch_invoices(month: str = "current_month", limit: int = 100) -> List[Dict[
         >>> std = df['amount'].std()
         >>> anomalies = df[(df['amount'] > mean + 3*std) | (df['amount'] < mean - 3*std)]
     """
-    return mcp_client.call_tool("fetch_invoices", {
+    return await mcp_client.call_tool("fetch_invoices", {
         "month": month,
         "limit": limit
     })
