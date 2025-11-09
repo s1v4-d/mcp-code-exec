@@ -22,7 +22,7 @@ class AgentRequest(BaseModel):
 class AgentResponse(BaseModel):
     """Agent response model."""
     status: str = Field(..., description="Status: success or error")
-    summary: str = Field(..., description="Summary of the execution")
+    response: str = Field(..., description="Response or summary")
     output_file: Optional[str] = Field(None, description="Path to output file if any")
     metrics: Dict[str, Any] = Field(..., description="Execution metrics")
     error: Optional[str] = Field(None, description="Error message if failed")
@@ -47,7 +47,7 @@ async def execute_agent(request: AgentRequest) -> AgentResponse:
         
         return AgentResponse(
             status=result["status"],
-            summary=result["summary"],
+            response=result["response"],
             output_file=result.get("output_file"),
             metrics=result["metrics"],
             error=result.get("error")
@@ -60,7 +60,7 @@ async def execute_agent(request: AgentRequest) -> AgentResponse:
         
         return AgentResponse(
             status="error",
-            summary="Agent execution failed",
+            response="Agent execution failed",
             metrics={
                 "tokens_used": 0,
                 "tool_calls_count": 0,

@@ -58,6 +58,28 @@ class Metrics:
             "total_time_ms": self.get_total_time_ms(),
             **self.data
         }
+        
+        # Calculate token efficiency metrics (as per Anthropic paper)
+        if "tokens_used" in self.data:
+            # Estimate what tokens would have been with full tool loading
+            # Assuming ~10 tools x ~500 tokens each = ~5000 tokens baseline
+            tools_available = self.data.get("tools_available", 10)
+            estimated_full_load = tools_available * 500  # Rough estimate
+            
+            tokens_used = self.data["tokens_used"]
+            if tokens_used > 0:
+                tokens_saved = max(0, estimated_full_load - tokens_used)
+                efficiency_pct = (tokens_saved / estimated_full_load * 100) if estimated_full_load > 0 else 0
+                
+                metrics_dict["token_efficiency"] = {
+                    "tokens_used": tokens_used,
+                    "estimated_full_load_tokens": estimated_full_load,
+                    "tokens_saved": tokens_saved,
+                    "efficiency_percentage": round(efficiency_pct, 1),
+                    "tools_available": tools_available,
+                    "tools_loaded_estimated": self.data.get("tools_loaded", "unknown")
+                }
+        
         return metrics_dict
     
     def save_to_log(self, additional_data: Dict[str, Any] = None):

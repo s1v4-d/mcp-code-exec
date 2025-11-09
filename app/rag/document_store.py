@@ -1,23 +1,37 @@
 """FAISS-based document store for RAG system using OpenAI embeddings only."""
 
-from typing import List, Dict, Any, Optional
-from pathlib import Path
+import asyncio
 import pickle
 from datetime import datetime
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+
+import aiofiles
 import numpy as np
 
 try:
     import faiss
-    from openai import OpenAI
+    from openai import AsyncOpenAI
 except ImportError as e:
     raise ImportError(f"Required package not found: {e}. Install with: uv sync")
+
+from app.exceptions import RAGError
 
 
 class DocumentStore:
     """Simple FAISS-based document store using OpenAI embeddings. No PyTorch."""
     
     def __init__(self, index_path: Path, openai_api_key: Optional[str] = None):
-        """Initialize document store with OpenAI embeddings."""
+        """
+        Initialize document store with OpenAI embeddings.
+        
+        Args:
+            index_path: Path to store FAISS index
+            openai_api_key: OpenAI API key
+            
+        Raises:
+            ValueError: If OpenAI API key is not provided
+        """
         if not openai_api_key:
             raise ValueError("OpenAI API key required for embeddings")
             
@@ -27,8 +41,8 @@ class DocumentStore:
         self.faiss_index_file = self.index_path / "faiss_index.bin"
         self.metadata_file = self.index_path / "metadata.pkl"
         
-        # Initialize OpenAI client
-        self.client = OpenAI(api_key=openai_api_key)
+        # Initialize async OpenAI client
+        self.client = AsyncOpenAI(api_key=openai_api_key)
         self.embedding_model = "text-embedding-3-small"
         
         # FAISS index
@@ -37,16 +51,39 @@ class DocumentStore:
         self.documents = []
         self.metadata = []
         
-        self._load_index()
+        # Load index synchronously during init
+        self._load_index_sync()
     
-    def _get_embedding(self, text: str) -> np.ndarray:
-        """Get embedding for text using OpenAI."""
-        response = self.client.embeddings.create(model=self.embedding_model, input=text)
+    async def _get_embedding(self, text: str) -> np.ndarray:
+        """
+        Get embedding for text using OpenAI asynchronously.
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            Numpy array of embedding
+            
+        Raises:
+            RAGError: If embedding generation fails
+        """
+        response = await self.client.embeddings.create(model=self.embedding_model, input=text)
         return np.array(response.data[0].embedding, dtype=np.float32)
     
-    def _get_embeddings(self, texts: List[str]) -> np.ndarray:
-        """Get embeddings for multiple texts."""
-        response = self.client.embeddings.create(model=self.embedding_model, input=texts)
+    async def _get_embeddings(self, texts: List[str]) -> np.ndarray:
+        """
+        Get embeddings for multiple texts asynchronously.
+        
+        Args:
+            texts: List of texts to embed
+            
+        Returns:
+            Numpy array of embeddings
+            
+        Raises:
+            RAGError: If embedding generation fails
+        """
+        response = await self.client.embeddings.create(model=self.embedding_model, input=texts)
         embeddings = [np.array(item.embedding, dtype=np.float32) for item in response.data]
         return np.vstack(embeddings)
     
@@ -73,18 +110,14 @@ class DocumentStore:
         
         return [c for c in chunks if c]
     
-    def _load_index(self):
-        """Load existing FAISS index or create new."""
+    def _load_index_sync(self):
+        """Load existing FAISS index or create new (synchronous for __init__)."""
         if self.faiss_index_file.exists() and self.metadata_file.exists():
-            try:
-                self.index = faiss.read_index(str(self.faiss_index_file))
-                with open(self.metadata_file, 'rb') as f:
-                    data = pickle.load(f)
-                    self.documents = data.get('documents', [])
-                    self.metadata = data.get('metadata', [])
-            except Exception as e:
-                print(f"Error loading index: {e}")
-                self._create_new_index()
+            self.index = faiss.read_index(str(self.faiss_index_file))
+            with open(self.metadata_file, 'rb') as f:
+                data = pickle.load(f)
+                self.documents = data.get('documents', [])
+                self.metadata = data.get('metadata', [])
         else:
             self._create_new_index()
     
@@ -94,18 +127,34 @@ class DocumentStore:
         self.documents = []
         self.metadata = []
     
-    def _save_index(self):
-        """Save FAISS index and metadata."""
-        faiss.write_index(self.index, str(self.faiss_index_file))
+    async def _save_index(self):
+        """Save FAISS index and metadata asynchronously."""
+        # FAISS write is CPU-bound, run in thread pool
+        await asyncio.to_thread(faiss.write_index, self.index, str(self.faiss_index_file))
+        
+        # Save metadata with aiofiles
         data = {'documents': self.documents, 'metadata': self.metadata}
-        with open(self.metadata_file, 'wb') as f:
-            pickle.dump(data, f)
+        async with aiofiles.open(self.metadata_file, 'wb') as f:
+            await f.write(pickle.dumps(data))
     
-    def add_documents(self, texts: List[str], source: str = "unknown", 
+    async def add_documents(self, texts: List[str], source: str = "unknown", 
                      metadatas: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        """Add documents to store."""
+        """
+        Add documents to store asynchronously.
+        
+        Args:
+            texts: List of texts to add
+            source: Source identifier
+            metadatas: Optional metadata for each document
+            
+        Returns:
+            Dictionary with success status and count
+            
+        Raises:
+            RAGError: If no texts provided or operation fails
+        """
         if not texts:
-            return {"status": "error", "message": "No texts provided"}
+            raise RAGError("No texts provided")
         
         all_chunks = []
         all_metadata = []
@@ -125,11 +174,11 @@ class DocumentStore:
                 }
                 all_metadata.append(meta)
         
-        embeddings = self._get_embeddings(all_chunks)
+        embeddings = await self._get_embeddings(all_chunks)
         self.index.add(embeddings)
         self.documents.extend(all_chunks)
         self.metadata.extend(all_metadata)
-        self._save_index()
+        await self._save_index()
         
         return {
             "status": "success",
@@ -137,13 +186,28 @@ class DocumentStore:
             "total_documents": len(self.documents)
         }
     
-    def search(self, query: str, k: int = 5, filter_source: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Search for similar documents."""
+    async def search(self, query: str, k: int = 5, filter_source: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Search for similar documents asynchronously.
+        
+        Args:
+            query: Search query
+            k: Number of results to return
+            filter_source: Optional source filter
+            
+        Returns:
+            List of matching documents with scores
+        """
         if not self.documents:
             return []
         
-        query_embedding = self._get_embedding(query).reshape(1, -1)
-        distances, indices = self.index.search(query_embedding, min(k * 2, len(self.documents)))
+        query_embedding = await self._get_embedding(query)
+        query_embedding = query_embedding.reshape(1, -1)
+        
+        # FAISS search is CPU-bound, run in thread pool
+        distances, indices = await asyncio.to_thread(
+            self.index.search, query_embedding, min(k * 2, len(self.documents))
+        )
         
         results = []
         for distance, idx in zip(distances[0], indices[0]):
@@ -165,7 +229,7 @@ class DocumentStore:
         
         return results
     
-    def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> Dict[str, Any]:
         """Get statistics."""
         sources = {}
         for meta in self.metadata:
@@ -179,25 +243,41 @@ class DocumentStore:
             'embedding_model': self.embedding_model
         }
     
-    def clear_index(self):
-        """Clear all documents."""
+    async def clear_index(self):
+        """
+        Clear all documents asynchronously.
+        
+        Returns:
+            Dictionary with success status
+        """
         self._create_new_index()
-        self._save_index()
+        await self._save_index()
         return {"status": "success", "message": "Index cleared"}
     
-    def delete_by_source(self, source: str) -> Dict[str, Any]:
-        """Delete documents from source."""
+    async def delete_by_source(self, source: str) -> Dict[str, Any]:
+        """
+        Delete documents from source asynchronously.
+        
+        Args:
+            source: Source identifier
+            
+        Returns:
+            Dictionary with deletion count
+            
+        Raises:
+            RAGError: If no documents found from source
+        """
         indices_to_keep = [i for i, meta in enumerate(self.metadata) 
                           if meta.get('source') != source]
         
         if len(indices_to_keep) == len(self.documents):
-            return {"status": "error", "message": f"No documents found from source: {source}"}
+            raise RAGError(f"No documents found from source: {source}")
         
         remaining_docs = [self.documents[i] for i in indices_to_keep]
         remaining_meta = [self.metadata[i] for i in indices_to_keep]
         
         if remaining_docs:
-            embeddings = self._get_embeddings(remaining_docs)
+            embeddings = await self._get_embeddings(remaining_docs)
             self._create_new_index()
             self.index.add(embeddings)
         else:
@@ -205,7 +285,7 @@ class DocumentStore:
         
         self.documents = remaining_docs
         self.metadata = remaining_meta
-        self._save_index()
+        await self._save_index()
         
         return {
             "status": "success",
@@ -220,9 +300,18 @@ class RAGRetriever:
     def __init__(self, doc_store: DocumentStore):
         self.doc_store = doc_store
     
-    def get_context(self, query: str, k: int = 3) -> str:
-        """Get context for query."""
-        results = self.doc_store.search(query, k=k)
+    async def get_context(self, query: str, k: int = 3) -> str:
+        """
+        Get context for query asynchronously.
+        
+        Args:
+            query: Search query
+            k: Number of results
+            
+        Returns:
+            Formatted context string
+        """
+        results = await self.doc_store.search(query, k=k)
         
         if not results:
             return "No relevant context found."

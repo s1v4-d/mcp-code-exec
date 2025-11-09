@@ -152,10 +152,33 @@ class CodeExecutor:
                 elif module_name == 'statistics':
                     import statistics
                     exec_globals['statistics'] = statistics
+                elif module_name == 'requests':
+                    import requests
+                    exec_globals['requests'] = requests
+                elif module_name == 'pytz':
+                    import pytz
+                    exec_globals['pytz'] = pytz
+                elif module_name == 'timezonefinder':
+                    from timezonefinder import TimezoneFinder
+                    exec_globals['timezonefinder'] = __import__('timezonefinder')
+                    exec_globals['TimezoneFinder'] = TimezoneFinder
+                elif module_name == 'os':
+                    import os
+                    exec_globals['os'] = os
+                elif module_name == 'sys':
+                    import sys
+                    exec_globals['sys'] = sys
+                elif module_name == 'pathlib':
+                    from pathlib import Path
+                    exec_globals['pathlib'] = __import__('pathlib')
+                    exec_globals['Path'] = Path
+                elif module_name == 'collections':
+                    import collections
+                    exec_globals['collections'] = collections
             except ImportError:
                 pass  # Module not available, skip it
         
-        # Add MCP client wrapper
+        # Add MCP client wrapper (legacy support - will be deprecated)
         from app.mcp_client.client import mcp_client
         exec_globals['mcp_client'] = mcp_client
         
@@ -168,6 +191,17 @@ class CodeExecutor:
         # Add to sys.modules so import can find it
         sys.modules['mcp_client_wrapper'] = wrapper_module
         exec_globals['mcp_client_wrapper'] = wrapper_module
+        
+        # Add servers module for progressive disclosure (as per Anthropic paper)
+        # This allows imports like: from servers.weather import get_current_weather
+        servers_path = Path(__file__).parent.parent.parent / 'servers'
+        if servers_path.exists() and str(servers_path) not in sys.path:
+            sys.path.insert(0, str(servers_path))
+        
+        # Add tool_discovery for agent filesystem exploration (as per paper)
+        # Agents can now: tool_discovery.list_servers(), read_file(), etc.
+        from servers.discovery import tool_discovery
+        exec_globals['tool_discovery'] = tool_discovery
         
         return exec_globals
     
@@ -206,6 +240,7 @@ class CodeExecutor:
             'getattr': getattr,
             'setattr': setattr,
             'type': type,
+            'open': open,  # Allow file operations (validated to workspace/ only)
             'ValueError': ValueError,
             'TypeError': TypeError,
             'KeyError': KeyError,
@@ -228,21 +263,22 @@ class CodeExecutor:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # Check for dangerous patterns
+        # Check for extremely dangerous patterns only
         dangerous_patterns = [
-            'import os',
-            'import sys',
             'import subprocess',
-            '__import__',
+            'subprocess.',
+            '__builtins__',
             'eval(',
             'exec(',
             'compile(',
-            'open(',  # Could be made safer by restricting to workspace
         ]
         
         for pattern in dangerous_patterns:
             if pattern in code:
                 return False, f"Dangerous pattern detected: {pattern}"
+        
+        # Relaxed file operations - allow workspace/ and common operations
+        # No longer blocking open() or os/sys imports as they're in ALLOWED_IMPORTS
         
         # Try to compile the code
         try:

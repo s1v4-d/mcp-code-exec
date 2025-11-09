@@ -19,7 +19,8 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "python-dateutil>=2.9.0",
     "restrictedpython>=7.4",
-    "requests>=2.32.0",
+    "httpx>=0.28.0",
+    "aiofiles>=24.1.0",
     "pytz>=2024.1",
     "timezonefinder>=6.5.0",
     "faiss-cpu>=1.8.0",
@@ -30,7 +31,6 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
-    "httpx>=0.28.0",
 ]
 
 [tool.hatch.build.targets.wheel]

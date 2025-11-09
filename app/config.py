@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     
     open_weather_api_key: str = Field(default="")
     
-    rag_index_path: Path = Field(default=Path("rag_index"))
     workspace_path: Path = Field(default=Path("workspace"))
     logs_path: Path = Field(default=Path("logs"))
     
@@ -27,7 +26,7 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = Field(default=8000, gt=0, lt=65536)
 
-    @field_validator("rag_index_path", "workspace_path", "logs_path", mode="after")
+    @field_validator("workspace_path", "logs_path", mode="after")
     @classmethod
     def ensure_path_exists(cls, v: Path) -> Path:
         v.mkdir(parents=True, exist_ok=True)
@@ -40,6 +39,8 @@ settings = Settings()
 ALLOWED_IMPORTS = frozenset({
     "json", "datetime", "typing", "pandas", "numpy",
     "re", "math", "statistics",
+    "requests", "pytz", "timezonefinder",
+    "os", "sys", "pathlib", "collections",
 })
 
 MCP_TOOLS_DIR = Path(__file__).parent / "mcp_client" / "tools"

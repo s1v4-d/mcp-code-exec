@@ -1,12 +1,14 @@
 """Weather tool for MCP - OpenWeatherMap API integration."""
 
 from typing import Dict, Any, List, Optional
-import requests
+import httpx
 import pandas as pd
 from datetime import datetime, timedelta
 from timezonefinder import TimezoneFinder
 import pytz
 from pathlib import Path
+
+from app.exceptions import WeatherAPIError, ConfigurationError
 
 
 class WeatherTool:
@@ -23,9 +25,22 @@ class WeatherTool:
         
         Args:
             api_key: OpenWeatherMap API key
+            
+        Raises:
+            ConfigurationError: If API key is missing or invalid
         """
+        if not api_key:
+            raise ConfigurationError("OpenWeatherMap API key is required")
+        
         self.api_key = api_key
         self.base_url = "https://api.openweathermap.org"
+        
+        # HTTP client configuration with connection pooling
+        self.client_config = {
+            "timeout": httpx.Timeout(10.0, connect=5.0),
+            "limits": httpx.Limits(max_connections=100, max_keepalive_connections=20),
+            "follow_redirects": True,
+        }
         
         # Load country codes CSV (we'll create a simple version)
         self.country_df = self._load_country_codes()
@@ -43,15 +58,32 @@ class WeatherTool:
         df['name'] = df['name'].str.upper()
         return df
     
-    def _get_response(self, url: str) -> Dict[str, Any]:
-        """Make API request and return JSON response."""
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception(f"API Error: {response.status_code} - {response.text}")
+    async def _get_response(self, url: str) -> Dict[str, Any]:
+        """
+        Make async API request and return JSON response.
+        
+        Args:
+            url: API endpoint URL
+            
+        Returns:
+            JSON response as dictionary
+            
+        Raises:
+            WeatherAPIError: If API request fails
+        """
+        async with httpx.AsyncClient(**self.client_config) as client:
+            response = await client.get(url)
+            
+            if response.status_code == 200:
+                return response.json()
+            
+            # Fail-fast: raise specific error instead of catching
+            error_msg = f"Weather API request failed: {response.status_code}"
+            if response.text:
+                error_msg += f" - {response.text}"
+            raise WeatherAPIError(error_msg)
     
-    def get_geo_data(self, zip_code: Optional[str] = None, 
+    async def get_geo_data(self, zip_code: Optional[str] = None, 
                      country_name: Optional[str] = None, 
                      city_name: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -64,6 +96,10 @@ class WeatherTool:
             
         Returns:
             Dictionary with lat, lon, name, and country
+            
+        Raises:
+            ValueError: If parameters are invalid or incomplete
+            WeatherAPIError: If API request fails
         """
         country_code = None
         
@@ -84,11 +120,11 @@ class WeatherTool:
             if country_code is None:
                 raise ValueError("Country name required when using zip code")
             url = f"{self.base_url}/geo/1.0/zip?zip={zip_code},{country_code}&appid={self.api_key}"
-            geo_data = self._get_response(url)
+            geo_data = await self._get_response(url)
         elif city_name is not None:
             country_param = f",{country_code}" if country_code else ""
             url = f"{self.base_url}/geo/1.0/direct?q={city_name}{country_param}&limit=1&appid={self.api_key}"
-            geo_data = self._get_response(url)
+            geo_data = await self._get_response(url)
             if isinstance(geo_data, list) and len(geo_data) > 0:
                 geo_data = geo_data[0]
             else:
@@ -127,7 +163,7 @@ class WeatherTool:
         
         return local_requested_datetime.timestamp()
     
-    def get_weather(self, geo_data: Dict[str, Any], 
+    async def get_weather(self, geo_data: Dict[str, Any], 
                     is_forecast: bool = False, 
                     local_requested_timestamp: Optional[float] = None) -> Dict[str, Any]:
         """
@@ -140,6 +176,10 @@ class WeatherTool:
             
         Returns:
             Weather data dictionary
+            
+        Raises:
+            ValueError: If parameters are invalid
+            WeatherAPIError: If API request fails
         """
         lat = geo_data['lat']
         lon = geo_data['lon']
@@ -147,7 +187,7 @@ class WeatherTool:
         if not is_forecast:
             # Current weather
             url = f"{self.base_url}/data/2.5/weather?lat={lat}&lon={lon}&appid={self.api_key}&units=imperial"
-            data = self._get_response(url)
+            data = await self._get_response(url)
             return data
         else:
             # 5-day forecast
@@ -155,7 +195,7 @@ class WeatherTool:
                 raise ValueError("local_requested_timestamp required for forecast")
             
             url = f"{self.base_url}/data/2.5/forecast?lat={lat}&lon={lon}&appid={self.api_key}&units=imperial"
-            data = self._get_response(url)
+            data = await self._get_response(url)
             
             # Find the closest forecast entry to the requested timestamp
             closest_entry = None
@@ -172,7 +212,7 @@ class WeatherTool:
             
             return closest_entry if closest_entry else data["list"][0]
     
-    def get_current_weather(self, zip_code: Optional[str] = None,
+    async def get_current_weather(self, zip_code: Optional[str] = None,
                            country_name: Optional[str] = None,
                            city_name: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -185,11 +225,15 @@ class WeatherTool:
             
         Returns:
             Current weather data
+            
+        Raises:
+            ValueError: If parameters are invalid
+            WeatherAPIError: If API request fails
         """
-        geo_data = self.get_geo_data(zip_code=zip_code, country_name=country_name, city_name=city_name)
-        return self.get_weather(geo_data, is_forecast=False)
+        geo_data = await self.get_geo_data(zip_code=zip_code, country_name=country_name, city_name=city_name)
+        return await self.get_weather(geo_data, is_forecast=False)
     
-    def get_forecast(self, zip_code: Optional[str] = None,
+    async def get_forecast(self, zip_code: Optional[str] = None,
                     country_name: Optional[str] = None,
                     city_name: Optional[str] = None,
                     days: int = 1,
@@ -206,13 +250,17 @@ class WeatherTool:
             
         Returns:
             Forecast weather data
+            
+        Raises:
+            ValueError: If parameters are invalid
+            WeatherAPIError: If API request fails
         """
         if days < 1 or days > 5:
             raise ValueError("Forecast only available for 1-5 days ahead")
         
-        geo_data = self.get_geo_data(zip_code=zip_code, country_name=country_name, city_name=city_name)
+        geo_data = await self.get_geo_data(zip_code=zip_code, country_name=country_name, city_name=city_name)
         timestamp = self.get_local_datetime_timestamp(geo_data, days=days, hour=hour)
-        return self.get_weather(geo_data, is_forecast=True, local_requested_timestamp=timestamp)
+        return await self.get_weather(geo_data, is_forecast=True, local_requested_timestamp=timestamp)
     
     def get_tools(self) -> Dict[str, Dict[str, Any]]:
         """
