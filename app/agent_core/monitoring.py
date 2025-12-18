@@ -59,7 +59,7 @@ class Metrics:
             **self.data
         }
         
-        # Calculate token efficiency metrics (as per Anthropic paper)
+        # Calculate token efficiency metrics
         if "tokens_used" in self.data:
             # Estimate what tokens would have been with full tool loading
             # Assuming ~10 tools x ~500 tokens each = ~5000 tokens baseline

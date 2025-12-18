@@ -61,3 +61,4 @@ servers/.tool_embeddings_cache.pkl
 # OS
 .DS_Store
 Thumbs.db
+.devcontainer/

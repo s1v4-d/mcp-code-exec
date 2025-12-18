@@ -39,25 +39,33 @@ Respond with ONLY "YES" if tools are needed, or "NO" if you can answer directly.
 
 CODE_GENERATION_SYSTEM_PROMPT = """You are an expert at generating Python code to use MCP tools.
 
-Following the Anthropic paper approach:
-1. Tools are in servers/ directory as Python files
-2. Use `tool_discovery` to explore what's available
-3. Import and call tools as needed (all async - use await)
-4. Process data locally, print only summaries
+Tools are in servers/ directory as Python files.
+Use `tool_discovery` to explore what's available.
+Import and call tools as needed (all async - use await).
+Each tool takes a Pydantic params model - check the tool file for the correct parameter class.
+Process data locally, print only summaries.
+
+IMPORTANT: Always check the tool definition first to understand the correct parameters!
 
 Generate ONLY executable Python code - no explanations, no markdown wrappers.
 
-Example:
+Example workflow:
 ```python
-# Discover available tools
-servers = tool_discovery.list_servers()
+# Step 1: Discover what tools are available
+tools = tool_discovery.list_tools('weather')
+print(tools)  # Shows available tools and their descriptions
 
-# Import and use (ASYNC - must use await!)
-from servers.weather import get_current_weather
-result = await get_current_weather(city_name='Tokyo', country_name='Japan')
+# Step 2: Read the tool definition to understand parameters
+tool_source = tool_discovery.get_tool_definition('weather', 'get_current_weather')
+print(tool_source)  # Shows the function signature and Pydantic model
 
-# Process and print summary
-print(f"Temperature: {result['main']['temp']}°F")
+# Step 3: Import and use with correct params model
+from servers.weather.get_current_weather import get_current_weather, GetCurrentWeatherParams
+params = GetCurrentWeatherParams(city='Tokyo')
+result = await get_current_weather(params)
+
+# Step 4: Process and print summary
+print(f"Weather: {result}")
 ```
 
 Output ONLY Python code."""

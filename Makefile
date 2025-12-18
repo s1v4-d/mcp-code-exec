@@ -1,4 +1,4 @@
-.PHONY: help setup start stop logs clean restart
+.PHONY: help setup start stop logs clean restart wrappers ui stop-ui
 
 .DEFAULT_GOAL := help
 
@@ -6,11 +6,14 @@ help:
 	@echo "MCP Code Execution POC - Available Commands"
 	@echo "make help      Show this help message"
 	@echo "make setup     Complete project setup"
-	@echo "make start     Start the FastAPI server"
-	@echo "make stop      Stop the server and kill processes on port 8000"
-	@echo "make restart   Stop and start the server"
+	@echo "make wrappers  Generate MCP tool wrappers"
+	@echo "make start     Start both FastAPI server and Streamlit UI"
+	@echo "make ui        Start only Streamlit UI"
+	@echo "make stop      Stop both server and UI"
+	@echo "make stop-ui   Stop only Streamlit UI"
+	@echo "make restart   Stop and start both server and UI"
 	@echo "make logs      Show server logs (last 50 lines)"
-	@echo "make clean     Stop server and clear all cache/temp files"
+	@echo "make clean     Stop all services and clear cache/temp files"
 
 setup:
 	@echo "Step 1/7: Checking Python version..."
@@ -34,6 +37,8 @@ setup:
 	fi
 	@echo "Step 5/7: Creating required directories..."
 	@mkdir -p workspace logs data/rag data/invoices data/rag_index servers
+	@echo "Step 5.5/7: Generating MCP tool wrappers..."
+	@uv run python -c "import asyncio; from app.runtime.wrapper_generator import generate_all_wrappers; asyncio.run(generate_all_wrappers())" || echo "Wrapper generation skipped (servers not running)"
 	@echo "Step 6/7: Setting up RAG index..."
 	@if [ -f .env ] && grep -q "OPENAI_API_KEY=your-openai-api-key-here" .env; then \
 		echo "Skipping RAG setup - configure OPENAI_API_KEY in .env first"; \
@@ -41,30 +46,57 @@ setup:
 		uv run python scripts/setup_rag.py || echo "RAG setup skipped"; \
 	fi
 	@echo "Step 7/7: Setting up PostgreSQL database..."
-	@if command -v docker &> /dev/null; then \
-		if ! docker ps -q -f name=postgres-mcp | grep -q .; then \
-			echo "Starting PostgreSQL in Docker..."; \
-			docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres --name postgres-mcp postgres:14 2>&1 || docker start postgres-mcp 2>&1; \
-			echo "Waiting for PostgreSQL to be ready..."; \
-			sleep 5; \
+	@echo "Note: PostgreSQL access is now provided via postgres-mcp MCP server"
+	@echo "The server will connect to your PostgreSQL instance using DATABASE_URL from .env"
+	@echo "You can set up a local database with:"
+	@echo "  - Docker: docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres --name postgres-mcp postgres:14"
+	@echo "  - Or use an existing PostgreSQL instance"
+	@echo ""
+	@if [ -f .env ] && grep -q "DATABASE_URL=" .env; then \
+		echo "DATABASE_URL configured in .env"; \
+		if command -v psql &> /dev/null || command -v docker &> /dev/null; then \
+			echo "Setting up sample database..."; \
+			uv run python scripts/setup_pg.py || echo "Database setup skipped - ensure PostgreSQL is running"; \
+		else \
+			echo "PostgreSQL client not found - skipping database setup"; \
 		fi; \
-		uv run python scripts/setup_pg.py || echo "PostgreSQL setup failed"; \
 	else \
-		echo "Docker not available - skipping PostgreSQL setup"; \
+		echo "DATABASE_URL not configured in .env"; \
 	fi
 	@echo "Setup complete. Edit .env and run 'make start'"
 
 start:
-	@echo "Starting server at http://localhost:8000"
-	@uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	@echo "Starting FastAPI server at http://localhost:8000"
+	@uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+	@sleep 2
+	@echo "Starting Streamlit UI at http://localhost:8501"
+	@uv run streamlit run ui/app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true &
+	@echo ""
+	@echo "Services started:"
+	@echo "  - API: http://localhost:8000 (docs: http://localhost:8000/docs)"
+	@echo "  - UI:  http://localhost:8501"
+	@echo ""
+	@echo "In Codespaces, use the forwarded port URLs from the Ports tab"
+
+ui:
+	@echo "Starting Streamlit UI at http://localhost:8501"
+	@uv run streamlit run ui/app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true
+
+stop-ui:
+	@echo "Stopping Streamlit UI..."
+	@-pkill -9 -f "streamlit run" 2>/dev/null || true
+	@-lsof -ti:8501 | xargs kill -9 2>/dev/null || true
+	@echo "Streamlit UI stopped"
 
 stop:
-	@echo "Stopping server..."
+	@echo "Stopping FastAPI server..."
 	@-pkill -9 -f "uvicorn app.main:app" 2>/dev/null || true
-	@echo "Killing processes on port 8000..."
 	@-lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+	@echo "Stopping Streamlit UI..."
+	@-pkill -9 -f "streamlit run" 2>/dev/null || true
+	@-lsof -ti:8501 | xargs kill -9 2>/dev/null || true
 	@sleep 1
-	@echo "Server stopped"
+	@echo "All services stopped"
 
 restart:
 	@echo "Restarting server..."
@@ -102,3 +134,8 @@ clean:
 	@echo "Clearing uv cache..."
 	@rm -rf .venv/__pycache__ 2>/dev/null || true
 	@echo "Clean complete"
+
+wrappers:
+	@echo "Generating MCP tool wrappers..."
+	@uv run python -c "import asyncio; from app.runtime.wrapper_generator import generate_all_wrappers; asyncio.run(generate_all_wrappers())"
+	@echo "Wrappers generated in servers/ directory"

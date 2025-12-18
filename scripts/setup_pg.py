@@ -94,13 +94,58 @@ async def create_schema(database: str):
     
     print(f"\nSetting up schema in '{database}'...")
     
-    # Read schema SQL file
-    schema_file = project_root / "servers" / "postgres_mcp" / "setup" / "schema.sql"
+    # Read schema SQL file from scripts/sql directory
+    schema_file = project_root / "scripts" / "sql" / "schema.sql"
     if not schema_file.exists():
         print(f"Schema file not found: {schema_file}")
-        return False
-    
-    schema_sql = schema_file.read_text()
+        print("Creating schema inline...")
+        
+        # Inline schema if file doesn't exist
+        schema_sql = """
+        -- Sample database schema for MCP demo
+        CREATE TABLE IF NOT EXISTS customers (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            price DECIMAL(10, 2) NOT NULL,
+            stock_quantity INTEGER NOT NULL DEFAULT 0,
+            category TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS orders (
+            id SERIAL PRIMARY KEY,
+            customer_id INTEGER REFERENCES customers(id),
+            total DECIMAL(10, 2) NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS order_items (
+            id SERIAL PRIMARY KEY,
+            order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+            product_id INTEGER REFERENCES products(id),
+            quantity INTEGER NOT NULL,
+            price DECIMAL(10, 2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+        CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
+        CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+        CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
+        
+        CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+        """
+    else:
+        schema_sql = schema_file.read_text()
     
     # Connect to the target database
     conn = await asyncpg.connect(
@@ -112,12 +157,24 @@ async def create_schema(database: str):
     )
     
     try:
-        await conn.execute(schema_sql)
+        # Execute schema SQL
+        # Split by semicolon and execute each statement separately
+        statements = [s.strip() for s in schema_sql.split(';') if s.strip()]
+        for stmt in statements:
+            try:
+                await conn.execute(stmt)
+            except Exception as e:
+                # Ignore errors for statements that might already exist
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Warning executing statement: {e}")
+        
         print("Schema created successfully")
         return True
         
     except Exception as e:
         print(f"Error creating schema: {e}")
+        import traceback
+        traceback.print_exc()
         return False
         
     finally:

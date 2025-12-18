@@ -1,0 +1,43 @@
+{
+  "mcpServers": {
+    "weather": {
+      "command": "python",
+      "args": ["-m", "app.mcp_servers.weather_server"],
+      "env": {},
+      "disabled": false
+    },
+    "rag": {
+      "command": "python",
+      "args": ["-m", "app.mcp_servers.rag_server"],
+      "env": {},
+      "disabled": false
+    },
+    "invoice": {
+      "command": "python",
+      "args": ["-m", "app.mcp_servers.invoice_server"],
+      "env": {},
+      "disabled": false
+    },
+    "postgres": {
+      "command": "python",
+      "args": ["-m", "app.mcp_servers.postgres_mcp_server"],
+      "env": {
+        "DATABASE_URI": "${DATABASE_URL}"
+      },
+      "disabled": false,
+      "notes": "PostgreSQL MCP server using crystaldba/postgres-mcp - provides schema inspection, query execution, explain plans, index tuning, and health checks"
+    },
+    "pgmcp": {
+      "command": "pgmcp-server",
+      "args": [],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+        "HTTP_ADDR": ":8081",
+        "HTTP_PATH": "/mcp"
+      },
+      "disabled": true,
+      "notes": "DEPRECATED - External PostgreSQL MCP server - replaced by 'postgres' server above"
+    }
+  }
+}

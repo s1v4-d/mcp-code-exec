@@ -61,38 +61,85 @@ User Request → FastAPI → LangChain Orchestrator → Code Generator (LLM)
 
 ### Prerequisites
 
-- Python 3.10+
-- Docker (optional but recommended - for automatic PostgreSQL setup)
+- Python 3.12+
 - OpenAI API key
 - OpenWeatherMap API key (optional, for weather features)
+- PostgreSQL database (optional, for postgres-mcp features)
 
-### One-Command Setup
+## Quick Start
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+# 1. Clone and setup
+git clone <repository>
 cd mcp-code-exec
-
-# Complete setup (installs uv, dependencies, creates .env, sets up databases)
 make setup
 
-# Edit .env file with your API keys
-nano .env
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your API keys
 
-# Start the server
+# 3. Generate MCP tool wrappers
+make wrappers
+
+# 4. Start the server
 make start
 ```
 
+### PostgreSQL MCP Server
+
+This project now uses **postgres-mcp** (from [crystaldba/postgres-mcp](https://github.com/crystaldba/postgres-mcp)) as an MCP server, providing:
+
+- **Schema Inspection**: Browse databases, tables, views, and sequences
+- **Safe Query Execution**: Read-only and unrestricted modes with validation
+- **Explain Plans**: Analyze query performance with hypothetical indexes
+- **Index Tuning**: AI-powered index recommendations for query optimization
+- **Database Health**: Monitor connections, vacuum, replication, and more
+- **Top Queries**: Identify slow and resource-intensive queries
+
+The agent can generate code that uses these tools following the MCP pattern.
+
+#### Setup PostgreSQL Database
+
+You have several options:
+
+**Option 1: Docker (Recommended)**
+```bash
+docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres --name postgres-mcp postgres:14
+uv run python scripts/setup_pg.py  # Creates sample database
+```
+
+**Option 2: Local PostgreSQL**
+```bash
+# Ubuntu/Debian
+sudo apt-get install postgresql
+
+# macOS
+brew install postgresql@14
+
+# Then create sample database
+uv run python scripts/setup_pg.py
+```
+
+**Option 3: Use Existing Database**
+Just set `DATABASE_URL` in `.env` to your existing PostgreSQL instance.
+
+## Features
+- **Code Execution**: Safe Python sandbox for agent-generated code
+- **MCP Integration**: Weather API and FAISS RAG as MCP tools
+- **PostgreSQL MCP**: Advanced database operations via postgres-mcp
+- **Progressive Disclosure**: On-demand tool loading
+- **Context Efficiency**: Data filtering in execution environment
+- **State Persistence**: Save results and reusable skills
+
+### What's Included
+
 The setup command automatically:
 - Installs `uv` if not already installed
-- Installs all Python dependencies via `uv sync`
+- Installs all Python dependencies (including postgres-mcp)
 - Creates `.env` file from template
 - Creates required directories (workspace, logs, data)
-- Starts PostgreSQL in Docker (if Docker is available)
-- Sets up PostgreSQL database with sample data
 - Sets up RAG index with sample documents
-
-No manual PostgreSQL installation required - Docker handles it automatically!
+- Provides guidance for PostgreSQL setup
 
 ### Manual Setup (Alternative)
 
@@ -112,46 +159,50 @@ cp .env.example .env
 # Create directories
 mkdir -p workspace logs data/rag data/invoices
 
-# Setup RAG and PostgreSQL
+# Setup RAG
 uv run python scripts/setup_rag.py
 
-# PostgreSQL (only if you have PostgreSQL installed locally)
+# Setup PostgreSQL (if you have it installed)
 uv run python scripts/setup_pg.py
 ```
 
-### PostgreSQL Notes
+### PostgreSQL MCP Server
 
-The `make setup` command automatically starts PostgreSQL in Docker if:
-- Docker is installed and running
-- No PostgreSQL container named `postgres-mcp` exists
+This project now uses **postgres-mcp** (from [crystaldba/postgres-mcp](https://github.com/crystaldba/postgres-mcp)) as an MCP server, providing:
 
-If you already have PostgreSQL running locally or prefer a different setup:
-- Set the connection details in `.env` file
-- Run `uv run python scripts/setup_pg.py` manually
+- **Schema Inspection**: Browse databases, tables, views, and sequences
+- **Safe Query Execution**: Read-only and unrestricted modes with validation
+- **Explain Plans**: Analyze query performance with hypothetical indexes
+- **Index Tuning**: AI-powered index recommendations for query optimization
+- **Database Health**: Monitor connections, vacuum, replication, and more
+- **Top Queries**: Identify slow and resource-intensive queries
 
-**Manual PostgreSQL Setup:**
+The agent can generate code that uses these tools following the MCP pattern.
 
-**Manual PostgreSQL Setup:**
+#### Setup PostgreSQL Database
+
+You have several options:
 
 **Option 1: Docker (Recommended)**
 ```bash
 docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres --name postgres-mcp postgres:14
-uv run python scripts/setup_pg.py
+uv run python scripts/setup_pg.py  # Creates sample database
 ```
 
-**Option 2: Local Installation**
+**Option 2: Local PostgreSQL**
 ```bash
 # Ubuntu/Debian
 sudo apt-get install postgresql
 
 # macOS
 brew install postgresql@14
-```
 
-Then run:
-```bash
+# Then create sample database
 uv run python scripts/setup_pg.py
 ```
+
+**Option 3: Use Existing Database**
+Just set `DATABASE_URL` in `.env` to your existing PostgreSQL instance.
 
 ### Configuration
 
@@ -166,24 +217,103 @@ OPENAI_MODEL=gpt-4o
 OPEN_WEATHER_API_KEY=your-openweather-key-here
 
 # RAG Configuration
-USE_OPENAI_EMBEDDINGS=false  # Set to true for OpenAI embeddings
-RAG_INDEX_PATH=/workspaces/mcp-code-exec/agent-mcp-codeexec-poc/rag_index
+RAG_INDEX_PATH=data/rag_index
 
-# PostgreSQL Configuration (for PostgreSQL MCP Server)
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=mcp_demo
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
+# PostgreSQL Configuration (for postgres-mcp MCP server)
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/mcp_demo
 
 # Paths
 WORKSPACE_PATH=/workspaces/mcp-code-exec/agent-mcp-codeexec-poc/workspace
 LOGS_PATH=/workspaces/mcp-code-exec/agent-mcp-codeexec-poc/logs
 ```
 
-### Running the Server
+### Running the Application
+
+#### Option 1: Start Everything (Recommended)
 
 ```bash
+# Start both FastAPI server and Streamlit UI
+make start
+```
+
+This will launch:
+- **FastAPI Server** on port 8000 (API endpoints and docs)
+- **Streamlit UI** on port 8501 (interactive web interface)
+
+In **GitHub Codespaces**, both ports are automatically forwarded:
+- API: `https://<codespace-name>-8000.preview.app.github.dev`
+- UI: `https://<codespace-name>-8501.preview.app.github.dev`
+
+Locally:
+- API: `http://localhost:8000` (docs at `/docs`)
+- UI: `http://localhost:8501`
+
+#### Option 2: Streamlit UI Only 🎨
+
+**Interactive web interface for the MCP Code Execution POC**
+
+```bash
+# Quick start
+make ui
+
+# Or manually with uv
+uv run streamlit run ui/app.py --server.port=8501 --server.address=0.0.0.0
+
+# Or using the launch script
+./ui/run.sh
+```
+
+**Features**:
+- **Dashboard**: Real-time MCP status, server overview, execution history
+- **Playground**: Interactive code editor with pre-built examples
+- **Monitor**: Analytics, server details, execution logs
+- **Documentation**: API reference, examples, resources
+
+
+#### Option 3: Script Execution Harness (CLI)
+
+Execute standalone Python scripts with MCP tools:
+
+```bash
+# Basic usage
+python -m app.runtime.script_harness <script_path>
+
+# Example: Test lazy loading
+python -m app.runtime.script_harness workspace/test_lazy_loading.py
+
+# Example: Test signal handling
+python -m app.runtime.script_harness workspace/test_signal_handling.py
+```
+
+**Features**:
+- **Lazy loading**: Servers connect only when tools are called
+- **Signal handling**: SIGINT/SIGTERM for graceful shutdown
+- **Automatic cleanup**: MCP connections closed on exit
+- **Persistent event loop**: Proper async operation handling
+
+#### Option 4: API Server Only (Web Service)
+
+```bash
+# Start the FastAPI server
+make start
+```
+
+The server will start at `http://localhost:8000` with:
+- Interactive API docs: `http://localhost:8000/docs`
+- OpenAPI schema: `http://localhost:8000/openapi.json`
+
+### Stopping Services
+
+```bash
+# Stop both API server and Streamlit UI
+make stop
+
+# Stop only Streamlit UI
+make stop-ui
+
+# Clean everything (stop + clear cache)
+make clean
+```
 # Start the FastAPI server
 make start
 ```
@@ -195,9 +325,15 @@ The server will start at `http://localhost:8000` with:
 ### Available Make Commands
 
 ```bash
-make help    # Show available commands
-make setup   # Complete project setup (uv, deps, env, databases)
-make start   # Start the FastAPI server
+make help      # Show available commands
+make setup     # Complete project setup (uv, deps, env, databases)
+make start     # Start both FastAPI server and Streamlit UI
+make ui        # Start only Streamlit UI
+make stop      # Stop both server and UI
+make stop-ui   # Stop only Streamlit UI
+make restart   # Restart all services
+make clean     # Stop services and clear cache
+make wrappers  # Generate MCP tool wrappers
 ```
 
 ## Usage

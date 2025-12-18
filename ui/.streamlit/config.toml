@@ -1,0 +1,38 @@
+# Streamlit Configuration for Codespaces
+
+[server]
+# Port for Streamlit app
+port = 8501
+
+# Enable CORS for Codespaces
+enableCORS = true
+
+# Enable XSS protection
+enableXsrfProtection = true
+
+# Set headless mode
+headless = true
+
+# Server address
+address = "0.0.0.0"
+
+[browser]
+# Don't try to open browser (doesn't work in Codespaces)
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+
+[client]
+# Show error details
+showErrorDetails = true
+
+[runner]
+# Faster reruns
+fastReruns = true
+
+[theme]
+# Custom theme
+primaryColor = "#1f77b4"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#262730"
+font = "sans serif"

@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     
     open_weather_api_key: str = Field(default="")
     
+    # PostgreSQL Configuration (for postgres-mcp server)
+    database_url: str = Field(
+        default="postgresql://postgres:postgres@localhost:5432/mcp_demo",
+        description="PostgreSQL connection URI for MCP server"
+    )
+    
     workspace_path: Path = Field(default=Path("workspace"))
     logs_path: Path = Field(default=Path("logs"))
     
@@ -36,11 +42,6 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-ALLOWED_IMPORTS = frozenset({
-    "json", "datetime", "typing", "pandas", "numpy",
-    "re", "math", "statistics",
-    "requests", "pytz", "timezonefinder",
-    "os", "sys", "pathlib", "collections",
-})
+ALLOWED_IMPORTS = None
 
 MCP_TOOLS_DIR = Path(__file__).parent / "mcp_client" / "tools"

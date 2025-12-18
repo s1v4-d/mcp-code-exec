@@ -22,34 +22,14 @@ def timeout_handler(signum, frame):
 
 
 class CodeExecutor:
-    """
-    Executes generated Python code in a controlled environment.
-    
-    Security features:
-    - Import restrictions
-    - Timeout protection
-    - Stdout/stderr capture
-    - Exception handling
-    """
+    """Executes generated Python code in a controlled environment."""
     
     def __init__(self):
         """Initialize the code executor."""
         self.timeout_seconds = settings.code_exec_timeout_seconds
     
     def execute(self, code: str) -> Dict[str, Any]:
-        """
-        Execute Python code in a sandboxed environment.
-        
-        Args:
-            code: Python code to execute
-            
-        Returns:
-            Dictionary with:
-                - success: bool
-                - output: captured stdout
-                - error: error message if failed
-                - execution_time_ms: execution time
-        """
+        """Execute Python code in a sandboxed environment."""
         start_time = time.time()
         
         # Prepare execution environment
@@ -87,10 +67,6 @@ class CodeExecutor:
             result["error"] = f"Execution timeout after {self.timeout_seconds}s"
             result["output"] = stdout_capture.getvalue()
             
-        except ImportError as e:
-            result["error"] = f"Import error: {str(e)}. Only allowed imports: {ALLOWED_IMPORTS}"
-            result["output"] = stdout_capture.getvalue()
-            
         except Exception as e:
             result["error"] = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
             result["output"] = stdout_capture.getvalue()
@@ -112,156 +88,31 @@ class CodeExecutor:
         return result
     
     def _prepare_environment(self) -> Dict[str, Any]:
-        """
-        Prepare the execution environment with allowed modules.
-        
-        Returns:
-            Dictionary of globals for exec()
-        """
-        # Start with builtins
-        exec_globals = {
-            "__builtins__": self._get_safe_builtins(),
-        }
-        
-        # Add allowed imports
-        for module_name in ALLOWED_IMPORTS:
-            try:
-                if module_name == 'typing':
-                    import typing
-                    exec_globals['typing'] = typing
-                elif module_name == 'json':
-                    import json
-                    exec_globals['json'] = json
-                elif module_name == 'datetime':
-                    import datetime
-                    exec_globals['datetime'] = datetime
-                elif module_name == 'pandas':
-                    import pandas as pd
-                    exec_globals['pd'] = pd
-                    exec_globals['pandas'] = pd
-                elif module_name == 'numpy':
-                    import numpy as np
-                    exec_globals['np'] = np
-                    exec_globals['numpy'] = np
-                elif module_name == 're':
-                    import re
-                    exec_globals['re'] = re
-                elif module_name == 'math':
-                    import math
-                    exec_globals['math'] = math
-                elif module_name == 'statistics':
-                    import statistics
-                    exec_globals['statistics'] = statistics
-                elif module_name == 'requests':
-                    import requests
-                    exec_globals['requests'] = requests
-                elif module_name == 'pytz':
-                    import pytz
-                    exec_globals['pytz'] = pytz
-                elif module_name == 'timezonefinder':
-                    from timezonefinder import TimezoneFinder
-                    exec_globals['timezonefinder'] = __import__('timezonefinder')
-                    exec_globals['TimezoneFinder'] = TimezoneFinder
-                elif module_name == 'os':
-                    import os
-                    exec_globals['os'] = os
-                elif module_name == 'sys':
-                    import sys
-                    exec_globals['sys'] = sys
-                elif module_name == 'pathlib':
-                    from pathlib import Path
-                    exec_globals['pathlib'] = __import__('pathlib')
-                    exec_globals['Path'] = Path
-                elif module_name == 'collections':
-                    import collections
-                    exec_globals['collections'] = collections
-            except ImportError:
-                pass  # Module not available, skip it
-        
-        # Add MCP client wrapper (legacy support - will be deprecated)
-        from app.mcp_client.client import mcp_client
-        exec_globals['mcp_client'] = mcp_client
-        
-        # Create a mock module for the import statement
+        """Prepare the execution environment."""
         import types
         import sys
-        wrapper_module = types.ModuleType('mcp_client_wrapper')
-        wrapper_module.mcp_client = mcp_client
+        from pathlib import Path
         
-        # Add to sys.modules so import can find it
-        sys.modules['mcp_client_wrapper'] = wrapper_module
-        exec_globals['mcp_client_wrapper'] = wrapper_module
+        exec_globals = {
+            "__builtins__": __builtins__,
+        }
         
-        # Add servers module for progressive disclosure (as per Anthropic paper)
-        # This allows imports like: from servers.weather import get_current_weather
+        from app.runtime.mcp_manager import get_mcp_manager, call_tool
+        exec_globals['mcp_manager'] = get_mcp_manager()
+        exec_globals['call_tool'] = call_tool
+        
+        try:
+            from app.mcp_client.client import mcp_client
+            exec_globals['mcp_client'] = mcp_client
+        except ImportError:
+            pass
+        
         servers_path = Path(__file__).parent.parent.parent / 'servers'
         if servers_path.exists() and str(servers_path) not in sys.path:
             sys.path.insert(0, str(servers_path))
         
-        # Add tool_discovery for agent filesystem exploration (as per paper)
-        # Agents can now: tool_discovery.list_servers(), read_file(), etc.
-        from servers.discovery import tool_discovery
-        exec_globals['tool_discovery'] = tool_discovery
+        app_path = Path(__file__).parent.parent.parent
+        if str(app_path) not in sys.path:
+            sys.path.insert(0, str(app_path))
         
         return exec_globals
-    
-    def _get_safe_builtins(self) -> Dict[str, Any]:
-        """
-        Get a restricted set of builtins for sandboxing.
-        
-        Returns:
-            Dictionary of safe builtin functions
-        """
-        # Start with standard builtins
-        safe_builtins = {
-            'print': print,
-            'len': len,
-            'range': range,
-            'str': str,
-            'int': int,
-            'float': float,
-            'bool': bool,
-            'list': list,
-            'dict': dict,
-            'set': set,
-            'tuple': tuple,
-            'abs': abs,
-            'min': min,
-            'max': max,
-            'sum': sum,
-            'sorted': sorted,
-            'enumerate': enumerate,
-            'zip': zip,
-            'map': map,
-            'filter': filter,
-            'round': round,
-            'isinstance': isinstance,
-            'hasattr': hasattr,
-            'getattr': getattr,
-            'setattr': setattr,
-            'type': type,
-            'open': open,  # Allow file operations (validated to workspace/ only)
-            'ValueError': ValueError,
-            'TypeError': TypeError,
-            'KeyError': KeyError,
-            'IndexError': IndexError,
-            'Exception': Exception,
-            '__import__': __import__,  # Needed for import statements
-            '__name__': '__main__',
-            '__doc__': None,
-        }
-        
-        return safe_builtins
-
-    async def execute_async(self, code: str) -> Dict[str, Any]:
-        """
-        Execute code asynchronously using the harness.
-        
-        Args:
-            code: Python code to execute
-            
-        Returns:
-            Execution result dictionary
-        """
-        # Use the harness for async execution
-        return await self.harness.execute_async(code)

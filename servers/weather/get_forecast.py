@@ -1,75 +1,28 @@
-"""
-Get weather forecast for a location.
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
 
-Tool: get_forecast
-Description: Retrieves weather forecast for 1-5 days ahead at a specific hour.
-"""
+class GetForecastParams(BaseModel):
+    """Parameters for get_forecast."""
+    city: str = Field(description="City name")
+    days: Optional[int] = Field(default=None, description="Number of days (1-5)")
+    units: Optional[str] = Field(default=None, description="Units: metric, imperial, or standard")
 
-from typing import Dict, Any, Optional
-from servers.client import mcp_client
 
-
-async def get_forecast(
-    city_name: Optional[str] = None,
-    zip_code: Optional[str] = None,
-    country_name: Optional[str] = None,
-    days: int = 1,
-    hour: int = 12
-) -> Dict[str, Any]:
+async def get_forecast(params: GetForecastParams) -> Dict[str, Any]:
     """
-    Get weather forecast for a location.
-    
-    Retrieves forecast for a specific day (1-5 days ahead) and hour.
-    Uses local timezone for the location.
+    Get weather forecast for a city
     
     Args:
-        city_name: City name (e.g., "Paris", "New York")
-        zip_code: Zip/postal code
-        country_name: Country name or 2-letter code
-            Required when using zip_code, optional for city_name
-        days: Number of days ahead (1-5), default 1
-        hour: Hour of the day (0-23), default 12 (noon)
-    
-    Returns:
-        Forecast data dictionary with structure:
-        {
-            "dt": int,              # Forecast timestamp
-            "main": {
-                "temp": float,      # Temperature in Fahrenheit
-                "feels_like": float,
-                "temp_min": float,
-                "temp_max": float,
-                "pressure": int,
-                "humidity": int
-            },
-            "weather": [{"id": int, "main": str, "description": str, "icon": str}],
-            "clouds": {"all": int},
-            "wind": {"speed": float, "deg": int},
-            "pop": float,           # Probability of precipitation (0-1)
-            "dt_txt": str          # Forecast time as text
-        }
-    
-    Example:
-        >>> # Get forecast for tomorrow at 2 PM
-        >>> forecast = await get_forecast(
-        ...     city_name="London",
-        ...     country_name="UK",
-        ...     days=1,
-        ...     hour=14
-        ... )
-        >>> print(f"Temperature: {forecast['main']['temp']}°F")
-        >>> print(f"Conditions: {forecast['weather'][0]['description']}")
+        params: Tool parameters
         
-        >>> # Get forecast for 3 days ahead
-        >>> forecast = await get_forecast(city_name="Tokyo", days=3, hour=10)
-    
-    Raises:
-        ValueError: If days not in range 1-5, or if required parameters missing
+    Returns:
+        Tool execution result
     """
-    return await mcp_client.call_tool("get_forecast", {
-        "city_name": city_name,
-        "zip_code": zip_code,
-        "country_name": country_name,
-        "days": days,
-        "hour": hour
-    })
+    from app.runtime.mcp_manager import call_tool
+    
+    result = await call_tool(
+        "weather__get_forecast",
+        params.model_dump(exclude_none=True)
+    )
+    
+    return result

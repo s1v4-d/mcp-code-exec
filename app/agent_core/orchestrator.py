@@ -26,16 +26,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class AgentOrchestrator:
-    """
-    Conversational agent with code execution capability for MCP tools.
-    
-    This implements a hybrid approach:
-    1. User makes a request
-    2. Agent decides if tools are needed
-    3. If yes: generates code, executes it, and responds based on results
-    4. If no: responds directly to the user
-    5. Always provides natural conversational responses
-    """
+    """Conversational agent with code execution capability for MCP tools."""
     
     def __init__(self, use_harness: bool = True):
         """Initialize the orchestrator.
@@ -98,7 +89,7 @@ class AgentOrchestrator:
                 print(f"[Agent] Request requires tools: {user_request}")
                 logger.info("Tool-based workflow initiated")
                 
-                # Step 2: Minimal tool context (following Anthropic paper approach)
+                # Step 2: Minimal tool context (progressive disclosure)
                 # Instead of loading tool definitions, we tell the agent HOW to discover them
                 logger.info("STEP 2: Getting minimal tool context (progressive disclosure)...")
                 tool_context = await self._get_minimal_tool_context()
@@ -234,6 +225,13 @@ class AgentOrchestrator:
     
     async def _needs_tools(self, user_request: str) -> bool:
         """Determine if the request requires tool usage."""
+        # Heuristic: if the user mentions database/postgres/data, prefer tools
+        lowered = user_request.lower()
+        db_intent = any(k in lowered for k in ["database", "postgres", "pg", "sql", "table", "schema", "data store", "db"])
+        if db_intent:
+            logger.debug("Intent suggests database access; forcing tool usage = True")
+            return True
+
         logger.debug("Checking available tools...")
         tools_list = self.mcp_client.list_tools()
         logger.debug(f"Found {len(tools_list)} registered tools")
@@ -283,16 +281,43 @@ class AgentOrchestrator:
         servers = tool_discovery.list_servers()
         logger.info(f"Found {len(servers)} server directories: {', '.join(servers)}")
         
-        # MINIMAL context - just tell agent servers exist and tool_discovery is available
+        # Get tool list with descriptions for better LLM guidance
+        tools_info = []
+        for server in servers:
+            server_tools = tool_discovery.list_tools(server)
+            for tool in server_tools:
+                tools_info.append(f"  - {server}.{tool['name']}: {tool['description'][:80] if tool['description'] else 'No description'}")
+        
+        tools_list = '\n'.join(tools_info) if tools_info else '  (use tool_discovery.list_tools() to explore)'
+        
+        # Enhanced context with tool list but still minimal
         context = f"""# MCP Tools Available
 
-Tools are in `servers/` directory: {', '.join(servers)}
+Servers: {', '.join(servers)}
 
-Use `tool_discovery` module to explore (already imported in your environment).
+Tools:
+{tools_list}
+
+## How to Use
+1. Use `tool_discovery.get_tool_definition(server, tool)` to see the full source code
+2. Each tool takes a Pydantic params class (import it from the same file)
+3. All tool functions are async - use `await`
+
+Example:
+```python
+# Read the tool source to see params
+source = tool_discovery.get_tool_definition('weather', 'get_current_weather')
+print(source)  # Shows GetCurrentWeatherParams(city='...')
+
+# Then import and use
+from servers.weather.get_current_weather import get_current_weather, GetCurrentWeatherParams
+result = await get_current_weather(GetCurrentWeatherParams(city='Tokyo'))
+print(result)
+```
 """
         
-        logger.info(f"✅ Minimal context prepared: {len(context)} chars (vs ~2000 chars before)")
-        logger.info(f"Agent will discover tools via coding, achieving 98.7% token reduction")
+        logger.info(f"Context prepared: {len(context)} chars with {len(tools_info)} tools listed")
+        logger.info(f"Agent will discover tool params via coding, achieving token reduction")
         logger.info(f"Available servers: {', '.join(servers)}")
         
         return context

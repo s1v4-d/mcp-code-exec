@@ -36,16 +36,13 @@ app.include_router(rag.router, prefix="/api/v1/rag", tags=["rag"])
 
 @app.on_event("startup")
 async def startup_event():
-    """Log startup configuration."""
     logger.info("="*80)
-    logger.info("🚀 MCP CODE EXECUTION AGENT STARTING")
+    logger.info("MCP CODE EXECUTION AGENT STARTING")
     logger.info("="*80)
     logger.info(f"OpenAI Model: {settings.openai_model}")
     logger.info(f"Workspace: {settings.workspace_path}")
     logger.info(f"Logs: {settings.logs_path}")
     logger.info(f"Code Execution Timeout: {settings.code_exec_timeout_seconds}s")
-    logger.info(f"Tool Discovery Mode: FILESYSTEM-based progressive disclosure")
-    logger.info(f"Following Anthropic paper approach (98.7% token reduction)")
     logger.info("="*80)
 
 

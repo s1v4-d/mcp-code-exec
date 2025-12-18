@@ -1,8 +1,4 @@
-"""Runtime Harness for Safe Code Execution
-
-Implements runpy-based execution with signal handling and resource limits.
-Based on Anthropic paper recommendations for secure code execution.
-"""
+"""Runtime Harness for Safe Code Execution."""
 
 import asyncio
 import signal
@@ -21,15 +17,7 @@ class ExecutionTimeout(Exception):
 
 
 class ExecutionHarness:
-    """Secure runtime harness for executing agent-generated code.
-    
-    Features:
-    - Signal-based timeout handling
-    - Stdout/stderr capture
-    - Working directory isolation
-    - Resource limit enforcement
-    - Clean exception propagation
-    """
+    """Secure runtime harness for executing agent-generated code."""
     
     def __init__(
         self,
@@ -47,6 +35,11 @@ class ExecutionHarness:
         self.timeout_seconds = timeout_seconds
         self.workspace_dir = Path(workspace_dir)
         self.workspace_dir.mkdir(exist_ok=True)
+        
+        # Store original signal handlers for restoration
+        self._original_sigint = None
+        self._original_sigterm = None
+        self._shutdown_requested = False
         
         # Default allowed modules (can be extended)
         self.allowed_modules = allowed_modules or [
@@ -69,6 +62,9 @@ class ExecutionHarness:
                 - execution_time_ms: int
         """
         try:
+            # Ensure MCP manager is initialized before execution
+            await self._ensure_mcp_initialized()
+            
             # Run execution with asyncio timeout instead of signals
             return await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(None, self.execute_sync_no_signal, code),
@@ -82,15 +78,16 @@ class ExecutionHarness:
                 "execution_time_ms": self.timeout_seconds * 1000
             }
     
-    def execute_sync(self, code: str) -> Dict[str, Any]:
-        """Execute code synchronously with timeout protection (main thread only).
+    async def _ensure_mcp_initialized(self):
+        """Ensure MCP manager is initialized."""
+        from app.runtime.mcp_manager import get_mcp_manager, ConnectionState
         
-        Args:
-            code: Python code to execute
-            
-        Returns:
-            Execution result dictionary
-        """
+        manager = get_mcp_manager()
+        if manager._state == ConnectionState.UNINITIALIZED:
+            await manager.load_config()
+    
+    def execute_sync(self, code: str) -> Dict[str, Any]:
+        """Execute code synchronously with timeout protection."""
         start_time = time.time()
         
         # Prepare result structure
@@ -105,19 +102,26 @@ class ExecutionHarness:
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
         
-        # Save original signal handler (only works in main thread)
-        old_handler = None
+        # Save original signal handlers (only works in main thread)
+        old_alarm_handler = None
         try:
             if hasattr(signal, 'SIGALRM'):
-                old_handler = signal.signal(signal.SIGALRM, self._timeout_handler)
+                old_alarm_handler = signal.signal(signal.SIGALRM, self._timeout_handler)
+            # Also set up SIGINT/SIGTERM handlers for graceful shutdown
+            self._setup_shutdown_handlers()
         except ValueError:
             # Not in main thread, skip signal handling
             pass
         
         try:
             # Set timeout alarm (only if in main thread)
-            if old_handler is not None and hasattr(signal, 'SIGALRM'):
+            if old_alarm_handler is not None and hasattr(signal, 'SIGALRM'):
                 signal.alarm(self.timeout_seconds)
+            
+            # Check if shutdown requested before executing
+            if self._shutdown_requested:
+                result["error"] = "Execution cancelled: shutdown requested"
+                return result
             
             # Prepare execution environment
             exec_globals = self._prepare_environment()
@@ -133,6 +137,10 @@ class ExecutionHarness:
         except ExecutionTimeout:
             result["error"] = f"Execution timeout after {self.timeout_seconds} seconds"
             result["output"] = stdout_capture.getvalue()
+        
+        except KeyboardInterrupt:
+            result["error"] = "Execution interrupted by user (SIGINT)"
+            result["output"] = stdout_capture.getvalue()
             
         except ImportError as e:
             result["error"] = f"Import error: {str(e)}\nAllowed modules: {', '.join(self.allowed_modules)}"
@@ -143,10 +151,11 @@ class ExecutionHarness:
             result["output"] = stdout_capture.getvalue()
             
         finally:
-            # Cancel timeout (only if in main thread)
-            if old_handler is not None and hasattr(signal, 'SIGALRM'):
+            # Cancel timeout and restore handlers (only if in main thread)
+            if old_alarm_handler is not None and hasattr(signal, 'SIGALRM'):
                 signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
+                signal.signal(signal.SIGALRM, old_alarm_handler)
+            self._restore_shutdown_handlers()
             
             # Record execution time
             result["execution_time_ms"] = int((time.time() - start_time) * 1000)
@@ -235,8 +244,38 @@ asyncio.run(__async_main__())
         return result
     
     def _timeout_handler(self, signum, frame):
-        """Signal handler for timeout."""
+        """Signal handler for timeout (SIGALRM)."""
         raise ExecutionTimeout("Code execution timed out")
+    
+    def _shutdown_handler(self, signum, frame):
+        """Signal handler for graceful shutdown (SIGINT/SIGTERM).
+        
+        Sets shutdown flag but doesn't raise immediately,
+        allowing cleanup to complete.
+        """
+        self._shutdown_requested = True
+        signal_name = signal.Signals(signum).name if hasattr(signal, 'Signals') else str(signum)
+        raise KeyboardInterrupt(f"Shutdown requested via {signal_name}")
+    
+    def _setup_shutdown_handlers(self):
+        """Set up SIGINT/SIGTERM handlers for graceful shutdown."""
+        try:
+            # Save original handlers
+            self._original_sigint = signal.signal(signal.SIGINT, self._shutdown_handler)
+            self._original_sigterm = signal.signal(signal.SIGTERM, self._shutdown_handler)
+        except (ValueError, OSError):
+            # Not in main thread or signal not supported
+            pass
+    
+    def _restore_shutdown_handlers(self):
+        """Restore original SIGINT/SIGTERM handlers."""
+        try:
+            if self._original_sigint is not None:
+                signal.signal(signal.SIGINT, self._original_sigint)
+            if self._original_sigterm is not None:
+                signal.signal(signal.SIGTERM, self._original_sigterm)
+        except (ValueError, OSError):
+            pass
     
     def _prepare_environment(self) -> Dict[str, Any]:
         """Prepare execution environment with allowed modules.

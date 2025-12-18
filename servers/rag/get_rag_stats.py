@@ -1,39 +1,26 @@
-"""
-Get RAG index statistics.
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
 
-Tool: get_rag_stats
-Description: Retrieve statistics about the RAG knowledge base.
-"""
-
-from typing import Dict, Any
-from servers.client import mcp_client
+class GetRagStatsParams(BaseModel):
+    """Parameters for get_rag_stats."""
+    pass
 
 
-async def get_rag_stats() -> Dict[str, Any]:
+async def get_rag_stats(params: GetRagStatsParams) -> Dict[str, Any]:
     """
-    Get statistics about the RAG index.
+    Get statistics about the RAG index
     
-    Provides information about indexed documents, sources,
-    and the embedding model used.
-    
+    Args:
+        params: Tool parameters
+        
     Returns:
-        Statistics dictionary with structure:
-        {
-            "total_documents": int,      # Total document chunks
-            "sources": {                 # Count by source
-                "source_name": int,
-                ...
-            },
-            "index_dimension": int,      # Embedding dimension
-            "embedding_model": str       # Model name
-        }
-    
-    Example:
-        >>> stats = await get_rag_stats()
-        >>> print(f"Total documents: {stats['total_documents']}")
-        >>> print(f"Embedding model: {stats['embedding_model']}")
-        >>> print("Documents by source:")
-        >>> for source, count in stats['sources'].items():
-        ...     print(f"  {source}: {count}")
+        Tool execution result
     """
-    return await mcp_client.call_tool("get_rag_stats", {})
+    from app.runtime.mcp_manager import call_tool
+    
+    result = await call_tool(
+        "rag__get_rag_stats",
+        params.model_dump(exclude_none=True)
+    )
+    
+    return result

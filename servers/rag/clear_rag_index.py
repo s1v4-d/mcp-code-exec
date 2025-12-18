@@ -1,35 +1,26 @@
-"""
-Clear RAG index.
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
 
-Tool: clear_rag_index
-Description: Delete all documents from the RAG knowledge base.
-"""
-
-from typing import Dict, Any
-from servers.client import mcp_client
+class ClearRagIndexParams(BaseModel):
+    """Parameters for clear_rag_index."""
+    pass
 
 
-async def clear_rag_index() -> Dict[str, str]:
+async def clear_rag_index(params: ClearRagIndexParams) -> Dict[str, Any]:
     """
-    Clear the entire RAG index.
+    Clear all documents from the RAG index
     
-    **WARNING**: This deletes ALL documents from the knowledge base.
-    This operation cannot be undone.
-    
-    Returns:
-        Confirmation dictionary with structure:
-        {
-            "status": "success",
-            "message": "Index cleared"
-        }
-    
-    Example:
-        >>> # Clear all documents
-        >>> result = await clear_rag_index()
-        >>> print(result['message'])
+    Args:
+        params: Tool parameters
         
-        >>> # Verify it's cleared
-        >>> stats = await get_rag_stats()
-        >>> print(f"Documents remaining: {stats['total_documents']}")
+    Returns:
+        Tool execution result
     """
-    return await mcp_client.call_tool("clear_rag_index", {})
+    from app.runtime.mcp_manager import call_tool
+    
+    result = await call_tool(
+        "rag__clear_rag_index",
+        params.model_dump(exclude_none=True)
+    )
+    
+    return result

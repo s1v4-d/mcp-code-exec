@@ -18,12 +18,16 @@ class MCPClient:
         self._register_tools()
     
     def _register_tools(self):
-        """Register available tools."""
+        """
+        Register available tools (LEGACY - will be deprecated).
+        
+        NOTE: This is kept for backward compatibility.
+        New code should use app.runtime.mcp_manager instead.
+        """
         # Import tools dynamically
         from app.mcp_client.tools.invoice_tool import InvoiceTool
         from app.mcp_client.tools.weather_tool import WeatherTool
         from app.mcp_client.tools.rag_tool import RAGTool
-        from app.mcp_client.tools.postgres_tool import PostgresTool
         from app.config import settings
         
         # Register invoice tool
@@ -49,13 +53,37 @@ class MCPClient:
         except Exception as e:
             print(f"[MCP Client] Warning: Could not register RAG tool: {e}")
         
-        # Register PostgreSQL tool
-        try:
-            postgres_tool = PostgresTool()
-            self.tools.update(postgres_tool.get_tools())
-            print("[MCP Client] PostgreSQL tool registered")
-        except Exception as e:
-            print(f"[MCP Client] Warning: Could not register PostgreSQL tool: {e}")
+        # NOTE: PostgreSQL tool removed - use PGMCP server instead via mcp_manager
+        # Fallback data introspection tool
+        def list_data_sources() -> Dict[str, Any]:
+            """List available local data sources for the agent.
+            Returns CSVs in workspace/, RAG availability, and notes on Postgres MCP.
+            """
+            import os
+            from pathlib import Path
+            workspace_dir = Path("workspace")
+            csvs = []
+            if workspace_dir.exists():
+                for p in workspace_dir.glob("*.csv"):
+                    csvs.append(p.name)
+            servers_dir = Path("servers")
+            servers = []
+            if servers_dir.exists():
+                for item in servers_dir.iterdir():
+                    if item.is_dir() and not item.name.startswith("_"):
+                        servers.append(item.name)
+            return {
+                "workspace_csvs": csvs,
+                "available_servers": servers,
+                "postgres_mcp_configured": "postgres_mcp" in servers,
+                "note": "If Postgres MCP is not configured, the agent cannot query a database."
+            }
+
+        self.tools["list_data_sources"] = {
+            "description": "List local CSVs and available MCP servers; indicate Postgres MCP status.",
+            "parameters": {},
+            "function": list_data_sources,
+        }
     
     def list_tools(self) -> List[Dict[str, Any]]:
         """
