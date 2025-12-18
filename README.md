@@ -2,7 +2,7 @@
 
 A Proof of Concept demonstrating code execution with Model Context Protocol (MCP) for efficient AI agents, enhanced with **Weather API** and **FAISS-based RAG** capabilities.
 
-## 🆕 New Features
+
 
 ### Weather API Integration
 - Real-time weather data using OpenWeatherMap
@@ -26,8 +26,7 @@ Both Weather and RAG are exposed as **MCP tools** that the agent can use by gene
 - Code executes in sandbox with tool access
 - Results processed and summarized
 
-📖 **See [docs/MCP_INTEGRATION.md](docs/MCP_INTEGRATION.md) for MCP usage guide**  
-📖 **See [docs/WEATHER_AND_RAG.md](docs/WEATHER_AND_RAG.md) for detailed API documentation**
+
 
 ## Overview
 
@@ -488,15 +487,6 @@ agent-mcp-codeexec-poc/
 │   │   └── document_store.py    # FAISS-based RAG system
 │   └── prompts/
 │       └── agent_prompt.py  # LLM prompt templates
-├── tests/
-│   ├── test_agent_flow.py
-│   ├── test_code_executor.py
-│   └── test_mcp_client.py
-└── docs/
-    ├── architecture.md
-    ├── monitoring.md
-    ├── WEATHER_AND_RAG.md   # Weather & RAG API documentation
-    └── MCP_INTEGRATION.md   # MCP integration guide
 ```
 
 ## How It Works
@@ -632,12 +622,6 @@ Metrics are saved to `logs/run_<timestamp>.json`:
 - [ ] Add RAG-powered context to agent responses
 - [ ] Implement hybrid search (keyword + semantic)
 
-## Credits
-
-- Weather API based on: [langchain-weather-tool-calling](https://github.com/hari04hp/langchain-weather-tool-calling) by Haripriya Rajendran
-- Weather data by: [OpenWeatherMap](https://openweathermap.org/)
-- Vector search by: [FAISS](https://github.com/facebookresearch/faiss)
-- Embeddings by: [sentence-transformers](https://www.sbert.net/)
 
 ## References
 
