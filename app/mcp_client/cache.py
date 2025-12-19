@@ -1,18 +1,17 @@
 """Tool caching for MCP client to reduce redundant list_tools() calls."""
 
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from threading import Lock
 from typing import Dict, List, Optional
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class CacheEntry:
+class CacheEntry(BaseModel):
     """Cached tool definitions with metadata."""
     
     tools: List[Dict]
     cached_at: datetime
-    hits: int = 0
+    hits: int = Field(default=0)
 
 
 class ToolCache:
